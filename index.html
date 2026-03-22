@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>채무확인.kr — 차용증 자동작성</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;600&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --ink:#1a1612;--ink2:#3d3530;--ink3:#7a6e67;
+  --paper:#faf7f2;--paper2:#f2ede4;--paper3:#e8e0d2;
+  --seal:#b03a2e;--seal2:#8e2d24;--gold:#c9a84c;
+  --kakao:#FEE500;--kakao-text:#191600;
+  --green:#2e7d52;--line:rgba(26,22,18,.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper2);color:var(--ink);font-family:'Noto Serif KR',serif;min-height:100vh}
+
+/* ── Header ── */
+.site-header{background:var(--ink);color:var(--paper);padding:16px 40px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:15px;letter-spacing:.12em;font-weight:300}.logo span{color:var(--gold)}
+.header-right{display:flex;align-items:center;gap:12px}
+.price-pill{background:var(--seal);color:#fff;font-family:'DM Mono',monospace;font-size:12px;font-weight:400;padding:5px 14px;border-radius:2px;letter-spacing:.05em}
+.badge{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;border:1px solid var(--gold);color:var(--gold);padding:4px 10px;border-radius:2px}
+
+/* ── Progress bar ── */
+.progress-bar{background:var(--paper);border-bottom:1px solid var(--paper3);display:flex;padding:0 40px}
+.prog-step{padding:13px 20px;font-size:11px;letter-spacing:.1em;color:var(--ink3);display:flex;align-items:center;gap:7px;border-bottom:2px solid transparent;transition:all .25s;white-space:nowrap}
+.prog-step.active{color:var(--ink);border-bottom-color:var(--seal)}
+.prog-step.done{color:var(--green);border-bottom-color:var(--green)}
+.prog-step .num{width:18px;height:18px;border-radius:50%;border:1px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:9px;font-family:'DM Mono',monospace;flex-shrink:0}
+.prog-step.done .num{background:var(--green);border-color:var(--green);color:#fff;font-size:11px}
+
+/* ── Layout ── */
+.layout{display:grid;grid-template-columns:420px 1fr;min-height:calc(100vh - 97px)}
+
+/* ── Form Panel ── */
+.form-panel{background:var(--paper);border-right:1px solid var(--paper3);padding:32px;overflow-y:auto;position:relative}
+.form-panel h2{font-size:12px;letter-spacing:.18em;color:var(--ink3);font-weight:400;margin-bottom:22px;text-transform:uppercase}
+.sec{font-size:10px;letter-spacing:.14em;color:var(--seal);font-weight:400;margin:22px 0 10px;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.sec::after{content:'';flex:1;height:1px;background:var(--paper3)}
+.field{margin-bottom:11px}
+label{display:block;font-size:10.5px;color:var(--ink3);margin-bottom:4px;letter-spacing:.04em}
+input,select,textarea{width:100%;background:var(--paper2);border:1px solid var(--paper3);color:var(--ink);font-family:'Noto Serif KR',serif;font-size:13px;padding:8px 11px;border-radius:3px;outline:none;transition:border-color .2s,background .2s}
+input:focus,select:focus,textarea:focus{border-color:var(--ink2);background:#fff}
+input:disabled,select:disabled,textarea:disabled{opacity:.45;cursor:not-allowed;background:var(--paper3)}
+textarea{resize:vertical;min-height:64px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+
+/* ── 결제 잠금 오버레이 ── */
+.pay-lock{position:absolute;inset:0;background:rgba(242,237,228,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;z-index:10;backdrop-filter:blur(2px)}
+.pay-lock.hidden{display:none}
+.lock-card{background:var(--paper);border:1px solid var(--paper3);border-radius:6px;padding:36px 40px;text-align:center;width:320px;box-shadow:0 8px 32px rgba(26,22,18,.1)}
+.lock-icon{width:52px;height:52px;background:var(--ink);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
+.lock-icon svg{opacity:.9}
+.lock-title{font-size:16px;font-weight:600;letter-spacing:.05em;margin-bottom:6px}
+.lock-desc{font-size:12px;color:var(--ink3);line-height:1.8;margin-bottom:24px}
+.lock-includes{text-align:left;margin-bottom:24px}
+.lock-includes .li{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);padding:5px 0;border-bottom:1px solid var(--paper3)}
+.lock-includes .li:last-child{border:none}
+.lock-includes .li .ck{color:var(--green);font-size:14px;flex-shrink:0}
+.price-row{display:flex;align-items:baseline;justify-content:center;gap:6px;margin-bottom:20px}
+.price-big{font-size:32px;font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.price-unit{font-size:13px;color:var(--ink3)}
+.price-note{font-size:10px;color:var(--ink3);margin-top:2px}
+
+/* ── 결제 버튼들 ── */
+.pay-methods{display:flex;flex-direction:column;gap:8px;width:100%}
+.btn-pay-kakao{width:100%;padding:13px;background:var(--kakao);color:var(--kakao-text);border:none;font-family:'Noto Serif KR',serif;font-size:13px;font-weight:700;letter-spacing:.05em;cursor:pointer;border-radius:3px;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:7px}
+.btn-pay-kakao:hover{background:#e6ce00}
+.btn-pay-card{width:100%;padding:13px;background:var(--ink);color:var(--paper);border:none;font-family:'Noto Serif KR',serif;font-size:13px;letter-spacing:.05em;cursor:pointer;border-radius:3px;transition:all .2s}
+.btn-pay-card:hover{background:var(--ink2)}
+.pay-secure{font-size:10px;color:var(--ink3);text-align:center;margin-top:10px;letter-spacing:.04em}
+
+/* ── 결제완료 뱃지 ── */
+.paid-badge{display:none;align-items:center;gap:6px;background:rgba(46,125,82,.1);border:1px solid rgba(46,125,82,.25);border-radius:3px;padding:8px 14px;margin-bottom:20px;font-size:11px;color:var(--green)}
+.paid-badge.show{display:flex}
+
+.btn-gen{width:100%;margin-top:16px;background:var(--seal);color:#fff;border:none;padding:13px;font-family:'Noto Serif KR',serif;font-size:13px;letter-spacing:.08em;cursor:pointer;border-radius:3px;transition:all .2s;position:relative}
+.btn-gen:hover{background:var(--seal2)}
+.btn-gen:disabled{opacity:.4;pointer-events:none}
+.btn-gen.loading{pointer-events:none}
+.btn-gen .sp{display:none;width:15px;height:15px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto}
+.btn-gen.loading .bt{display:none}
+.btn-gen.loading .sp{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Preview ── */
+.preview-panel{background:var(--paper2);padding:36px 52px;overflow-y:auto;position:relative}
+.preview-panel::before{content:'';position:absolute;inset:0;background-image:repeating-linear-gradient(0deg,transparent,transparent 27px,rgba(26,22,18,.04) 27px,rgba(26,22,18,.04) 28px);pointer-events:none}
+.placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--ink3);gap:14px;opacity:.45}
+.placeholder p{font-size:12px;letter-spacing:.05em}
+
+#document{background:#fff;max-width:580px;margin:0 auto;padding:56px 64px;box-shadow:0 4px 32px rgba(26,22,18,.1);position:relative;display:none;animation:fadeUp .35s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+#document::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--seal2),var(--seal),var(--gold))}
+.doc-title{text-align:center;font-size:25px;font-weight:600;letter-spacing:.3em;margin-bottom:6px}
+.doc-subtitle{text-align:center;font-size:10px;letter-spacing:.22em;color:var(--ink3);margin-bottom:32px;font-weight:300}
+.doc-body{font-size:13px;line-height:2.3;color:var(--ink);white-space:pre-wrap;word-break:keep-all}
+.doc-body strong{font-weight:600}
+.doc-seal-area{margin-top:40px;padding-top:24px;border-top:1px solid var(--line)}
+.doc-date{text-align:center;font-size:12px;letter-spacing:.1em;color:var(--ink2);margin-bottom:24px}
+.sig-row{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.sig-block{position:relative}
+.sig-block .role{font-size:10px;letter-spacing:.12em;color:var(--ink3);margin-bottom:6px}
+.sig-block .name-line{font-size:14px;padding-bottom:4px;border-bottom:1px solid var(--line);min-height:24px}
+.sig-block .sub{font-size:10px;color:var(--ink3);margin-top:4px}
+.seal{position:absolute;right:0;top:-6px;width:46px;height:46px;border:2px solid var(--seal);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--seal);font-size:10px;opacity:.65;transform:rotate(-12deg)}
+
+.action-bar{display:none;max-width:580px;margin:14px auto 0;gap:10px}
+.action-bar.show{display:flex}
+.btn-act{flex:1;padding:12px 8px;border:1px solid var(--paper3);background:var(--paper);color:var(--ink2);font-family:'Noto Serif KR',serif;font-size:12px;letter-spacing:.05em;cursor:pointer;border-radius:3px;transition:all .2s}
+.btn-act:hover{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn-kakao{background:var(--kakao);color:var(--kakao-text);border-color:var(--kakao);font-weight:700;display:flex;align-items:center;justify-content:center;gap:7px;flex:2;font-size:13px}
+.btn-kakao:hover{background:#e6ce00;border-color:#e6ce00;color:var(--kakao-text)}
+
+/* ── 모달 ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(26,22,18,.65);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--paper);border-radius:5px;width:460px;max-width:96vw;box-shadow:0 24px 64px rgba(26,22,18,.3);overflow:hidden}
+.modal-head{padding:18px 24px;display:flex;align-items:center;justify-content:space-between}
+.modal-head h3{font-size:14px;letter-spacing:.08em;font-weight:600}
+.modal-head .x{background:none;border:none;cursor:pointer;font-size:18px;opacity:.45;line-height:1;padding:0;color:inherit}
+.modal-head .x:hover{opacity:1}
+.modal-body{padding:0 24px 24px}
+
+/* 결제 모달 */
+.pay-modal-price{text-align:center;padding:20px;background:var(--paper2);border-radius:4px;margin-bottom:20px}
+.pay-modal-price .pm-amount{font-size:36px;font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.pay-modal-price .pm-label{font-size:11px;color:var(--ink3);margin-top:4px;letter-spacing:.05em}
+.pay-modal-includes{margin-bottom:20px}
+.pmi-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);padding:7px 0;border-bottom:1px solid var(--paper3)}
+.pmi-row:last-child{border:none}
+.pmi-ck{color:var(--green);font-size:14px}
+.pay-btns{display:flex;flex-direction:column;gap:8px}
+.pb-kakao{width:100%;padding:14px;background:var(--kakao);color:var(--kakao-text);border:none;font-family:'Noto Serif KR',serif;font-size:14px;font-weight:700;letter-spacing:.05em;cursor:pointer;border-radius:3px;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.pb-kakao:hover{background:#e6ce00}
+.pb-card{width:100%;padding:14px;background:var(--ink);color:var(--paper);border:none;font-family:'Noto Serif KR',serif;font-size:13px;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .2s}
+.pb-card:hover{background:var(--ink2)}
+.pb-toss{width:100%;padding:14px;background:#fff;color:#333d4b;border:1px solid var(--paper3);font-family:'Noto Serif KR',serif;font-size:13px;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .2s}
+.pb-toss:hover{border-color:var(--ink2);background:var(--paper2)}
+.pay-safe{font-size:10px;color:var(--ink3);text-align:center;margin-top:10px;letter-spacing:.04em}
+.modal-cancel{width:100%;padding:10px;background:transparent;border:1px solid var(--paper3);color:var(--ink3);font-family:'Noto Serif KR',serif;font-size:12px;cursor:pointer;border-radius:3px;margin-top:8px}
+
+/* 서명 모달 */
+.kakao-top{display:flex;align-items:center;gap:10px;background:var(--kakao);border-radius:3px;padding:12px 14px;margin-bottom:18px}
+.kakao-top .kt-icon{width:32px;height:32px;background:var(--kakao-text);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.kakao-top .kt-title{font-size:13px;font-weight:700;color:var(--kakao-text)}
+.kakao-top .kt-sub{font-size:10px;color:rgba(25,22,0,.55);margin-top:1px}
+.signer-card{background:var(--paper2);border:1px solid var(--paper3);border-radius:3px;padding:12px 14px;margin-bottom:8px}
+.signer-card .sc-role{font-size:10px;color:var(--ink3);letter-spacing:.08em;margin-bottom:4px}
+.signer-card .sc-name{font-size:13px;font-weight:600;margin-bottom:4px}
+.signer-card .sc-ph input{width:100%;background:transparent;border:none;border-bottom:1px solid var(--paper3);border-radius:0;font-size:12px;font-family:'DM Mono',monospace;padding:3px 2px;color:var(--ink);outline:none}
+.signer-card .sc-ph input:focus{border-bottom-color:var(--ink2)}
+.btn-send{width:100%;padding:14px;background:var(--kakao);color:var(--kakao-text);border:none;font-family:'Noto Serif KR',serif;font-size:14px;font-weight:700;letter-spacing:.05em;cursor:pointer;border-radius:3px;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:16px}
+.btn-send:hover{background:#e6ce00}
+
+/* 완료 모달 */
+.done-box{text-align:center;padding:24px 0}
+.done-icon{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:20px}
+.done-detail{background:var(--paper2);border-radius:3px;padding:12px 14px;margin:14px 0;text-align:left}
+.dd-row{display:flex;justify-content:space-between;font-size:11.5px;padding:5px 0;border-bottom:1px solid var(--paper3);color:var(--ink2)}
+.dd-row:last-child{border:none}
+.dd-row span:last-child{font-weight:600;color:var(--ink)}
+
+/* 로딩 오버레이 */
+.g-loader{display:none;position:fixed;inset:0;background:rgba(26,22,18,.5);z-index:300;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+.g-loader.show{display:flex}
+.g-loader .lsp{width:32px;height:32px;border:2.5px solid rgba(250,247,242,.2);border-top-color:var(--paper);border-radius:50%;animation:spin .8s linear infinite}
+.g-loader p{color:var(--paper);font-size:13px;letter-spacing:.05em}
+
+@media(max-width:820px){
+  .layout{grid-template-columns:1fr}
+  .preview-panel{padding:24px 16px}
+  #document{padding:36px 24px}
+  .sig-row{grid-template-columns:1fr}
+  .progress-bar{padding:0 12px;overflow-x:auto}
+  .site-header{padding:14px 20px}
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="logo">채무<span>확인</span>.kr &nbsp;—&nbsp; 차용증 자동작성</div>
+  <div class="header-right">
+    <div class="price-pill">₩4,900</div>
+    <div class="badge">AI POWERED</div>
+  </div>
+</header>
+
+<nav class="progress-bar">
+  <div class="prog-step active" id="ps1"><div class="num">1</div>결제</div>
+  <div class="prog-step" id="ps2"><div class="num">2</div>정보 입력</div>
+  <div class="prog-step" id="ps3"><div class="num">3</div>문서 확인</div>
+  <div class="prog-step" id="ps4"><div class="num">4</div>전자서명</div>
+</nav>
+
+<div class="layout">
+
+  <!-- ── 폼 패널 ── -->
+  <aside class="form-panel">
+
+    <!-- 결제 잠금 오버레이 -->
+    <div class="pay-lock" id="pay-lock">
+      <div class="lock-card">
+        <div class="lock-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <rect x="5" y="11" width="14" height="10" rx="2" stroke="#faf7f2" stroke-width="1.5"/>
+            <path d="M8 11V7a4 4 0 018 0v4" stroke="#faf7f2" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="lock-title">결제 후 이용 가능합니다</div>
+        <div class="lock-desc">차용증 작성 및 카카오 전자서명<br>서비스를 이용하실 수 있습니다</div>
+
+        <div class="lock-includes">
+          <div class="li"><span class="ck">✓</span>AI 법적 문구 자동 완성</div>
+          <div class="li"><span class="ck">✓</span>PDF 고화질 다운로드</div>
+          <div class="li"><span class="ck">✓</span>카카오 전자서명 발송</div>
+          <div class="li"><span class="ck">✓</span>30일 내 재다운로드</div>
+        </div>
+
+        <div class="price-row">
+          <div class="price-big">₩4,900</div>
+          <div class="price-unit">1회 이용권</div>
+        </div>
+        <div class="price-note" style="margin-bottom:16px;color:var(--ink3);font-size:10px">부가세 포함</div>
+
+        <div class="pay-methods">
+          <button class="btn-pay-kakao" onclick="openPayModal()">
+            <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
+              <path d="M9 1.5C4.86 1.5 1.5 4.14 1.5 7.38c0 2.07 1.26 3.9 3.18 4.98L4.02 15l3.6-2.34c.45.06.9.09 1.38.09 4.14 0 7.5-2.64 7.5-5.88S13.14 1.5 9 1.5z" fill="var(--kakao-text)"/>
+            </svg>
+            카카오페이로 결제
+          </button>
+          <button class="btn-pay-card" onclick="openPayModal()">신용카드 / 토스페이로 결제</button>
+        </div>
+        <div class="pay-secure">🔒 &nbsp;SSL 보안결제 · 개인정보 암호화</div>
+      </div>
+    </div>
+
+    <!-- 결제 완료 뱃지 (결제 후 표시) -->
+    <div class="paid-badge" id="paid-badge">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="7" stroke="var(--green)" stroke-width="1.2"/>
+        <path d="M5 8l2 2 4-4" stroke="var(--green)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      결제 완료 · 차용증을 작성해주세요
+    </div>
+
+    <h2>차용증 정보 입력</h2>
+
+    <div class="sec">채권자 (빌려주는 사람)</div>
+    <div class="row2">
+      <div class="field"><label>성명</label><input id="ln" placeholder="홍길동" disabled/></div>
+      <div class="field"><label>주민등록번호</label><input id="li" placeholder="000000-0000000" disabled/></div>
+    </div>
+    <div class="field"><label>주소</label><input id="la" placeholder="서울시 강남구 테헤란로 123" disabled/></div>
+    <div class="field"><label>휴대폰 번호</label><input id="lp" placeholder="010-0000-0000" disabled/></div>
+
+    <div class="sec">채무자 (빌리는 사람)</div>
+    <div class="row2">
+      <div class="field"><label>성명</label><input id="bn" placeholder="김철수" disabled/></div>
+      <div class="field"><label>주민등록번호</label><input id="bi" placeholder="000000-0000000" disabled/></div>
+    </div>
+    <div class="field"><label>주소</label><input id="ba" placeholder="서울시 서초구 반포대로 456" disabled/></div>
+    <div class="field"><label>휴대폰 번호</label><input id="bp" placeholder="010-0000-0000" disabled/></div>
+
+    <div class="sec">금전 조건</div>
+    <div class="row2">
+      <div class="field"><label>원금 (원)</label><input id="amt" type="number" placeholder="10000000" disabled/></div>
+      <div class="field"><label>이자율 (%/연)</label><input id="rate" type="number" placeholder="5" step="0.1" disabled/></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>대여일</label><input id="ds" type="date" disabled/></div>
+      <div class="field"><label>변제기일</label><input id="de" type="date" disabled/></div>
+    </div>
+    <div class="field">
+      <label>이자 지급 방식</label>
+      <select id="im" disabled>
+        <option value="매월 말일">매월 말일 지급</option>
+        <option value="만기 일시">만기 시 일시 지급</option>
+        <option value="분기별">분기별 지급</option>
+        <option value="무이자">무이자</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>변제 방법</label>
+      <select id="rm" disabled>
+        <option value="계좌이체">계좌이체</option>
+        <option value="현금">현금 지급</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>특약 사항 (선택)</label>
+      <textarea id="sp" placeholder="예: 조기 상환 시 위약금 없음 등" disabled></textarea>
+    </div>
+
+    <button class="btn-gen" id="genbtn" onclick="generateDoc()" disabled>
+      <span class="bt">✦ 차용증 자동 작성</span>
+      <div class="sp"></div>
+    </button>
+  </aside>
+
+  <!-- ── 미리보기 ── -->
+  <main class="preview-panel">
+    <div class="placeholder" id="ph">
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+        <rect x="9" y="5" width="26" height="34" rx="3" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="15" y1="14" x2="29" y2="14" stroke="currentColor"/>
+        <line x1="15" y1="20" x2="29" y2="20" stroke="currentColor"/>
+        <line x1="15" y1="26" x2="23" y2="26" stroke="currentColor"/>
+      </svg>
+      <p>결제 후 차용증을 작성할 수 있습니다</p>
+    </div>
+
+    <div id="document">
+      <div class="doc-title">차 용 증</div>
+      <div class="doc-subtitle">LOAN AGREEMENT</div>
+      <div class="doc-body" id="docbody"></div>
+      <div class="doc-seal-area">
+        <div class="doc-date" id="docdate"></div>
+        <div class="sig-row">
+          <div class="sig-block">
+            <div class="role">채권자</div>
+            <div class="name-line" id="sigl"></div>
+            <div class="sub" id="sigla"></div>
+          </div>
+          <div class="sig-block">
+            <div class="role">채무자</div>
+            <div class="name-line" id="sigb"></div>
+            <div class="sub" id="sigba"></div>
+            <div class="seal">인</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-bar" id="actbar">
+      <button class="btn-act" onclick="downloadPDF()">⬇ PDF 저장</button>
+      <button class="btn-act btn-kakao" onclick="openSignModal()">
+        <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
+          <path d="M9 1.5C4.86 1.5 1.5 4.14 1.5 7.38c0 2.07 1.26 3.9 3.18 4.98L4.02 15l3.6-2.34c.45.06.9.09 1.38.09 4.14 0 7.5-2.64 7.5-5.88S13.14 1.5 9 1.5z" fill="var(--kakao-text)"/>
+        </svg>
+        카카오 전자서명 받기
+      </button>
+    </div>
+  </main>
+</div>
+
+
+<!-- ════════ 결제 모달 ════════ -->
+<div class="overlay" id="pay-modal">
+  <div class="modal">
+    <div class="modal-head" style="background:var(--ink);color:var(--paper)">
+      <h3 style="color:var(--paper);font-weight:400">결제하기</h3>
+      <button class="x" onclick="closeModal('pay-modal')" style="color:var(--paper)">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:20px">
+      <div class="pay-modal-price">
+        <div class="pm-amount">₩4,900</div>
+        <div class="pm-label">차용증 1회 이용권 · 부가세 포함</div>
+      </div>
+      <div class="pay-modal-includes">
+        <div class="pmi-row"><span class="pmi-ck">✓</span>AI 법적 문구 자동 완성</div>
+        <div class="pmi-row"><span class="pmi-ck">✓</span>PDF 고화질 다운로드</div>
+        <div class="pmi-row"><span class="pmi-ck">✓</span>카카오 전자서명 발송</div>
+        <div class="pmi-row"><span class="pmi-ck">✓</span>30일 내 재다운로드</div>
+      </div>
+      <div class="pay-btns">
+        <button class="pb-kakao" onclick="processPayment('kakaopay')">
+          <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
+            <path d="M9 1.5C4.86 1.5 1.5 4.14 1.5 7.38c0 2.07 1.26 3.9 3.18 4.98L4.02 15l3.6-2.34c.45.06.9.09 1.38.09 4.14 0 7.5-2.64 7.5-5.88S13.14 1.5 9 1.5z" fill="var(--kakao-text)"/>
+          </svg>
+          카카오페이 ₩4,900
+        </button>
+        <button class="pb-card" onclick="processPayment('card')">신용카드 ₩4,900</button>
+        <button class="pb-toss" onclick="processPayment('tosspay')">토스페이 ₩4,900</button>
+      </div>
+      <div class="pay-safe">🔒 &nbsp;SSL 보안결제 · 토스페이먼츠 제공</div>
+      <button class="modal-cancel" onclick="closeModal('pay-modal')">취소</button>
+
+      <!-- 토스페이먼츠 연동 코드 (운영자용 주석) -->
+      <!--
+        실제 연동 시 아래 코드로 교체:
+        <script src="https://js.tosspayments.com/v1/payment"></script>
+        const toss = TossPayments("YOUR_CLIENT_KEY");
+        toss.requestPayment('카카오페이', {
+          amount: 4900,
+          orderId: 'order_' + Date.now(),
+          orderName: '차용증 1회 이용권',
+          successUrl: location.href + '?paid=true',
+          failUrl: location.href + '?paid=fail',
+        });
+      -->
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════ 카카오 서명 모달 ════════ -->
+<div class="overlay" id="sign-modal">
+  <div class="modal">
+    <div class="modal-head" style="background:#191600">
+      <h3 style="color:var(--kakao)">카카오 전자서명 요청</h3>
+      <button class="x" onclick="closeModal('sign-modal')" style="color:var(--kakao);opacity:.5">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:20px">
+      <div class="kakao-top">
+        <div class="kt-icon">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M9 1.5C4.86 1.5 1.5 4.14 1.5 7.38c0 2.07 1.26 3.9 3.18 4.98L4.02 15l3.6-2.34c.45.06.9.09 1.38.09 4.14 0 7.5-2.64 7.5-5.88S13.14 1.5 9 1.5z" fill="#FEE500"/>
+          </svg>
+        </div>
+        <div>
+          <div class="kt-title">카카오써트 전자계약</div>
+          <div class="kt-sub">카카오톡 발송 · 공동인증서와 동일한 법적 효력</div>
+        </div>
+      </div>
+
+      <div class="signer-card">
+        <div class="sc-role">채권자</div>
+        <div class="sc-name" id="sm-ln">—</div>
+        <div class="sc-ph"><input id="sm-lp" placeholder="010-0000-0000" maxlength="13"/></div>
+      </div>
+      <div class="signer-card">
+        <div class="sc-role">채무자</div>
+        <div class="sc-name" id="sm-bn">—</div>
+        <div class="sc-ph"><input id="sm-bp" placeholder="010-0000-0000" maxlength="13"/></div>
+      </div>
+
+      <button class="btn-send" onclick="sendSign()">
+        <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
+          <path d="M9 1.5C4.86 1.5 1.5 4.14 1.5 7.38c0 2.07 1.26 3.9 3.18 4.98L4.02 15l3.6-2.34c.45.06.9.09 1.38.09 4.14 0 7.5-2.64 7.5-5.88S13.14 1.5 9 1.5z" fill="var(--kakao-text)"/>
+        </svg>
+        카카오톡으로 서명 요청 발송
+      </button>
+      <button class="modal-cancel" onclick="closeModal('sign-modal')">취소</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════ 서명 완료 모달 ════════ -->
+<div class="overlay" id="done-modal">
+  <div class="modal">
+    <div class="modal-head" style="background:var(--green)">
+      <h3 style="color:#fff;font-weight:400">발송 완료</h3>
+      <button class="x" onclick="closeModal('done-modal')" style="color:#fff">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:20px">
+      <div class="done-box">
+        <div class="done-icon" style="background:var(--kakao)">✓</div>
+        <h3 style="font-size:16px;margin-bottom:6px">카카오톡 발송 완료!</h3>
+        <p style="font-size:12px;color:var(--ink3);line-height:1.8">두 분의 카카오톡으로<br>서명 요청이 전송되었습니다</p>
+        <div class="done-detail">
+          <div class="dd-row"><span>채권자</span><span id="d-ln">—</span></div>
+          <div class="dd-row"><span>채무자</span><span id="d-bn">—</span></div>
+          <div class="dd-row"><span>서명 기한</span><span id="d-dl">—</span></div>
+          <div class="dd-row"><span>완료 시</span><span style="color:var(--green)">PDF 자동 발송</span></div>
+        </div>
+      </div>
+      <button class="modal-cancel" onclick="closeModal('done-modal')">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- 전역 로딩 -->
+<div class="g-loader" id="loader">
+  <div class="lsp"></div>
+  <p id="loader-msg">처리 중...</p>
+</div>
+
+<script>
+// ══════════════════════════════════
+//  설정 (운영자만 수정)
+// ══════════════════════════════════
+const CFG = {
+  PRICE: 4900,
+  SIGN_API: '/api/send-sign',   // 백엔드 엔드포인트
+  TEST_MODE: true               // true = 시뮬레이션, false = 실제 결제·서명
+};
+
+// ── 상태 ──
+let isPaid = false;
+
+// ── 유틸 ──
+const $ = id => document.getElementById(id);
+const v = id => $(id) ? $(id).value.trim() : '';
+function comma(n){return Number(n).toLocaleString('ko-KR')}
+function koreanAmt(n){
+  const u=['','일','이','삼','사','오','육','칠','팔','구'],b=['','만','억','조'];
+  let num=Math.floor(Number(n)),r='',ui=0;
+  if(!num)return'영';
+  while(num>0){let c=num%10000;if(c){let s='',d=[c%10,Math.floor(c/10)%10,Math.floor(c/100)%10,Math.floor(c/1000)%10],p=['','십','백','천'];for(let i=3;i>=0;i--)if(d[i])s+=(d[i]===1&&i>0?'':u[d[i]])+p[i];r=s+b[ui]+r;}num=Math.floor(num/10000);ui++;}return r;
+}
+function setStep(n){
+  ['ps1','ps2','ps3','ps4'].forEach((id,i)=>{
+    $(id).classList.remove('active','done');
+    if(i+1<n)$(id).classList.add('done');
+    if(i+1===n)$(id).classList.add('active');
+  });
+}
+function showLoader(msg){$('loader-msg').textContent=msg||'처리 중...';$('loader').classList.add('show')}
+function hideLoader(){$('loader').classList.remove('show')}
+function closeModal(id){$(id).classList.remove('open')}
+document.querySelectorAll('.overlay').forEach(m=>{
+  m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')})
+});
+
+// ── 결제 모달 열기 ──
+function openPayModal(){
+  $('pay-modal').classList.add('open');
+}
+
+// ── 결제 처리 ──
+async function processPayment(method){
+  closeModal('pay-modal');
+  showLoader('결제 처리 중...');
+
+  if(!CFG.TEST_MODE){
+    // ── 실제 토스페이먼츠 연동 ──
+    // const toss = TossPayments("YOUR_CLIENT_KEY");
+    // await toss.requestPayment(method === 'kakaopay' ? '카카오페이' : '카드', {
+    //   amount: CFG.PRICE,
+    //   orderId: 'order_' + Date.now(),
+    //   orderName: '차용증 1회 이용권',
+    //   successUrl: location.href + '?paid=true',
+    //   failUrl: location.href + '?paid=fail',
+    // });
+  } else {
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  hideLoader();
+  activateForm();
+}
+
+// ── 결제 완료 후 폼 활성화 ──
+function activateForm(){
+  isPaid = true;
+
+  // 잠금 해제
+  $('pay-lock').classList.add('hidden');
+  $('paid-badge').classList.add('show');
+
+  // 모든 입력 활성화
+  document.querySelectorAll('.form-panel input, .form-panel select, .form-panel textarea')
+    .forEach(el => el.disabled = false);
+  $('genbtn').disabled = false;
+
+  // 미리보기 안내 문구 업데이트
+  $('ph').querySelector('p').textContent = '정보를 입력하고 작성 버튼을 눌러주세요';
+
+  setStep(2);
+}
+
+// ── 차용증 생성 ──
+async function generateDoc(){
+  const lName=v('ln'),bName=v('bn'),amt=v('amt'),ds=v('ds'),de=v('de');
+  if(!lName||!bName||!amt||!ds||!de){alert('채권자·채무자 성명, 금액, 날짜는 필수입니다.');return}
+  const btn=$('genbtn');btn.classList.add('loading');
+  showLoader('AI가 차용증을 작성하는 중...');
+  const prompt=`아래 정보로 한국 법률에 맞는 차용증 본문을 작성해주세요.
+규칙: 법적 문서체, 존댓말 없음, 금액 한글 병기(금 ${koreanAmt(amt)}원 정 (₩${comma(amt)})), 원금/이자/변제방법/기한이익 상실/관할 법원 조항 포함, 특약 있으면 추가. **중요항목**은 **텍스트**로. 본문만 출력, 제목/서명란/날짜 없이.
+채권자: ${lName} (${v('li')||'주민번호 미기재'}) / ${v('la')||'주소 미기재'}
+채무자: ${bName} (${v('bi')||'주민번호 미기재'}) / ${v('ba')||'주소 미기재'}
+원금: ${comma(amt)}원 / 이자: 연 ${v('rate')||0}% / 대여: ${ds} / 변제: ${de}
+이자지급: ${$('im').value} / 변제방법: ${$('rm').value}
+특약: ${v('sp')||'없음'}`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+    });
+    const data=await res.json();
+    const text=data.content.map(c=>c.text||'').join('');
+    $('docbody').innerHTML=text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
+    $('sigl').textContent=lName+' (인)';
+    $('sigla').textContent=v('la');
+    $('sigb').textContent=bName+' (인)';
+    $('sigba').textContent=v('ba');
+    $('docdate').textContent=new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric'});
+    $('ph').style.display='none';
+    $('document').style.display='block';
+    $('actbar').classList.add('show');
+    setStep(3);
+  }catch(e){alert('오류가 발생했습니다. 다시 시도해주세요.')}
+  finally{btn.classList.remove('loading');hideLoader()}
+}
+
+// ── PDF 저장 ──
+async function downloadPDF(){
+  showLoader('PDF 생성 중...');
+  try{
+    const{jsPDF}=window.jspdf;
+    const canvas=await html2canvas($('document'),{scale:2,backgroundColor:'#ffffff'});
+    const img=canvas.toDataURL('image/jpeg',.95);
+    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const pw=pdf.internal.pageSize.getWidth();
+    const iw=pw-20,ih=iw/(canvas.width/canvas.height);
+    pdf.addImage(img,'JPEG',10,10,iw,ih);
+    pdf.save('차용증_'+new Date().toLocaleDateString('ko-KR').replace(/[\. ]/g,'').replace('.','')+ '.pdf');
+  }finally{hideLoader()}
+}
+
+// ── 서명 모달 열기 ──
+function openSignModal(){
+  $('sm-ln').textContent=v('ln')||'—';
+  $('sm-bn').textContent=v('bn')||'—';
+  $('sm-lp').value=v('lp');
+  $('sm-bp').value=v('bp');
+  $('sign-modal').classList.add('open');
+}
+
+// ── 서명 발송 ──
+async function sendSign(){
+  const lPhone=v('sm-lp'),bPhone=v('sm-bp');
+  if(!lPhone||!bPhone){alert('두 분의 휴대폰 번호를 입력해주세요.');return}
+  closeModal('sign-modal');
+  showLoader('카카오톡 발송 중...');
+  setStep(4);
+  try{
+    const{jsPDF}=window.jspdf;
+    const canvas=await html2canvas($('document'),{scale:2,backgroundColor:'#ffffff'});
+    const img=canvas.toDataURL('image/jpeg',.9);
+    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const pw=pdf.internal.pageSize.getWidth();
+    const iw=pw-20,ih=iw/(canvas.width/canvas.height);
+    pdf.addImage(img,'JPEG',10,10,iw,ih);
+    const pdfBase64=pdf.output('datauristring').split(',')[1];
+
+    if(!CFG.TEST_MODE){
+      const res=await fetch(CFG.SIGN_API,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          pdfBase64,
+          lenderName:v('ln'),lenderPhone:lPhone,
+          borrowerName:v('bn'),borrowerPhone:bPhone,
+          title:'차용증_'+new Date().toLocaleDateString('ko-KR')
+        })
+      });
+      const data=await res.json();
+      if(!data.success)throw new Error(data.message);
+    } else {
+      await new Promise(r=>setTimeout(r,1500));
+    }
+
+    $('d-ln').textContent=v('ln');
+    $('d-bn').textContent=v('bn');
+    const dl=new Date();dl.setDate(dl.getDate()+7);
+    $('d-dl').textContent=dl.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric'});
+    hideLoader();
+    $('done-modal').classList.add('open');
+
+  }catch(e){hideLoader();alert('발송 중 오류: '+e.message);setStep(3)}
+}
+
+// ── URL 파라미터로 결제 완료 처리 (토스페이먼츠 리다이렉트) ──
+(function(){
+  const p=new URLSearchParams(location.search);
+  if(p.get('paid')==='true') activateForm();
+})();
+</script>
+</body>
+</html>
