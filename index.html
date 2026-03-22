@@ -270,7 +270,7 @@ textarea{resize:vertical;min-height:64px}
           </svg>
           계좌이체 안내 보기
         </button>
-        <button class="btn-free" onclick="openAdminPanel()">관리자 (운영자 전용)</button>
+        <!-- 관리자: chayongjeung.vercel.app?admin=true 로 접근 -->
       </div>
     </div>
 
@@ -390,7 +390,7 @@ textarea{resize:vertical;min-height:64px}
 
       <!-- 계좌 정보 -->
       <div class="account-card">
-        <div class="bank-name">카카오뱅크</div>
+        <div class="bank-name">농협</div>
         <div class="account-num" id="display-account">3333-00-0000000</div>
         <div class="account-holder" id="display-holder">홍길동</div>
         <button class="copy-btn" onclick="copyAccount()">
@@ -457,7 +457,7 @@ textarea{resize:vertical;min-height:64px}
         <!-- 계좌 설정 -->
         <div class="admin-section">
           <h4>계좌 정보 설정</h4>
-          <div class="field"><label>은행명</label><input id="cfg-bank" value="카카오뱅크"/></div>
+          <div class="field"><label>은행명</label><input id="cfg-bank" value="농협"/></div>
           <div class="field"><label>계좌번호</label><input id="cfg-account" value="3333-00-0000000" style="font-family:'DM Mono',monospace"/></div>
           <div class="field"><label>예금주</label><input id="cfg-holder" value="홍길동"/></div>
           <button onclick="saveAccountConfig()" style="width:100%;padding:9px;background:var(--ink);color:var(--paper);border:none;font-family:'Noto Serif KR',serif;font-size:12px;cursor:pointer;border-radius:3px;margin-top:4px">계좌 정보 저장</button>
@@ -561,10 +561,10 @@ textarea{resize:vertical;min-height:64px}
 //  ⚙️  운영자 설정 — 여기만 수정하면 됩니다
 // ══════════════════════════════════════
 const CFG = {
-  BANK:       '카카오뱅크',        // 은행명
-  ACCOUNT:    '3333-00-0000000',  // ← 본인 계좌번호로 교체
-  HOLDER:     '홍길동',            // ← 본인 이름으로 교체
-  ADMIN_PW:   '1234',              // ← 관리자 비밀번호 변경
+  BANK:       '농협',
+  ACCOUNT:    '225038-56-027579',
+  HOLDER:     '차호윤',
+  ADMIN_PW:   '0640',
   SIGN_API:   '/api/send-sign',
   TEST_MODE:  true
 };
@@ -598,19 +598,27 @@ document.querySelectorAll('.overlay').forEach(m=>{
   m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')})
 });
 
-// ── 초기화: 저장된 계좌 불러오기 ──
+// ── 초기화: CFG 고정값으로 계좌 표시 ──
 function initAccountDisplay(){
-  const saved = JSON.parse(localStorage.getItem('account_cfg') || 'null');
-  const bank    = saved?.bank    || CFG.BANK;
-  const account = saved?.account || CFG.ACCOUNT;
-  const holder  = saved?.holder  || CFG.HOLDER;
-  $('display-account').textContent = account;
-  $('display-holder').textContent = holder;
-  // 모달 상단 은행명 업데이트
+  $('display-account').textContent = CFG.ACCOUNT;
+  $('display-holder').textContent  = CFG.HOLDER;
   const bankEl = document.querySelector('.account-card .bank-name');
-  if(bankEl) bankEl.textContent = bank;
+  if(bankEl) bankEl.textContent = CFG.BANK;
 }
 initAccountDisplay();
+
+// ── 관리자: URL 파라미터 ?admin=true 로만 접근 ──
+(function(){
+  const p = new URLSearchParams(location.search);
+  if(p.get('admin') === 'true'){
+    const adminBtn = document.createElement('button');
+    adminBtn.className = 'btn-free';
+    adminBtn.textContent = '관리자';
+    adminBtn.onclick = openAdminPanel;
+    adminBtn.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:999;opacity:.4;font-size:11px;padding:6px 12px';
+    document.body.appendChild(adminBtn);
+  }
+})();
 
 // ── 계좌이체 모달 ──
 function openTransferModal(){
@@ -618,8 +626,7 @@ function openTransferModal(){
   setStep(1);
 }
 function copyAccount(){
-  const saved = JSON.parse(localStorage.getItem('account_cfg') || 'null');
-  const account = saved?.account || CFG.ACCOUNT;
+  const account = CFG.ACCOUNT;
   navigator.clipboard.writeText(account.replace(/-/g,'')).then(()=>{
     const btn = document.querySelector('.copy-btn');
     const orig = btn.innerHTML;
@@ -665,15 +672,13 @@ function activateForm(){
 function openAdminPanel(){$('admin-modal').classList.add('open')}
 function checkAdminPw(){
   const pw = v('admin-pw');
-  const saved = JSON.parse(localStorage.getItem('account_cfg') || 'null');
-  const correctPw = saved?.pw || CFG.ADMIN_PW;
+  const correctPw = CFG.ADMIN_PW;
   if(pw === correctPw){
     $('admin-lock').style.display='none';
     $('admin-content').style.display='block';
-    // 현재 설정값 반영
-    $('cfg-bank').value = saved?.bank || CFG.BANK;
-    $('cfg-account').value = saved?.account || CFG.ACCOUNT;
-    $('cfg-holder').value = saved?.holder || CFG.HOLDER;
+    $('cfg-bank').value    = CFG.BANK;
+    $('cfg-account').value = CFG.ACCOUNT;
+    $('cfg-holder').value  = CFG.HOLDER;
     renderOrderList();
   } else {
     $('pw-msg').textContent = '비밀번호가 올바르지 않습니다';
@@ -681,10 +686,7 @@ function checkAdminPw(){
 }
 
 function saveAccountConfig(){
-  const cfg = { bank: v('cfg-bank'), account: v('cfg-account'), holder: v('cfg-holder'), pw: CFG.ADMIN_PW };
-  localStorage.setItem('account_cfg', JSON.stringify(cfg));
-  initAccountDisplay();
-  alert('저장되었습니다!');
+  alert('계좌 변경은 index.html 파일 상단 CFG 설정에서 직접 수정 후 GitHub에 다시 올려주세요.\n\nCFG.BANK, CFG.ACCOUNT, CFG.HOLDER 값을 변경하면 됩니다.');
 }
 
 // ── 인증코드 생성 ──
