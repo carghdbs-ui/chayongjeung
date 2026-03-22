@@ -1,7 +1,5 @@
 // api/verify-code.js
-// 고객이 입력한 인증코드를 검증하는 API
-
-let codeStore = global._codeStore || (global._codeStore = []);
+import { createClient } from 'redis';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,21 +11,30 @@ export default async function handler(req, res) {
   const { code } = req.body;
   if (!code) return res.status(400).json({ success: false, message: '코드를 입력해주세요' });
 
-  codeStore = global._codeStore || [];
   const upperCode = code.toUpperCase().trim();
-  const found = codeStore.find(c => c.code === upperCode && !c.used);
 
-  if (found) {
-    found.used = true;
-    found.usedAt = new Date().toLocaleTimeString('ko-KR');
-    global._codeStore = codeStore;
-    console.log('[코드 사용]', upperCode);
-    return res.status(200).json({ success: true });
-  } else {
-    const expired = codeStore.find(c => c.code === upperCode && c.used);
-    const msg = expired
-      ? '이미 사용된 인증코드입니다'
-      : '올바르지 않은 인증코드입니다. 다시 확인해주세요';
-    return res.status(200).json({ success: false, message: msg });
+  const client = createClient({ url: process.env.REDIS_URL });
+  await client.connect();
+
+  const raw = await client.get(`code:${upperCode}`);
+
+  if (!raw) {
+    await client.disconnect();
+    return res.status(200).json({ success: false, message: '올바르지 않은 인증코드입니다. 다시 확인해주세요' });
   }
+
+  const entry = JSON.parse(raw);
+
+  if (entry.used) {
+    await client.disconnect();
+    return res.status(200).json({ success: false, message: '이미 사용된 인증코드입니다' });
+  }
+
+  // 사용 처리
+  entry.used = true;
+  entry.usedAt = new Date().toLocaleString('ko-KR');
+  await client.setEx(`code:${upperCode}`, 86400, JSON.stringify(entry));
+
+  await client.disconnect();
+  return res.status(200).json({ success: true });
 }

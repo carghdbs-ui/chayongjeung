@@ -1,7 +1,5 @@
 // api/list-codes.js
-// 관리자가 발급 내역을 조회하는 API
-
-let codeStore = global._codeStore || (global._codeStore = []);
+import { createClient } from 'redis';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -17,6 +15,20 @@ export default async function handler(req, res) {
     return res.status(403).json({ success: false, message: '권한 없음' });
   }
 
-  codeStore = global._codeStore || [];
-  return res.status(200).json({ success: true, codes: codeStore.slice(0, 50) });
+  const client = createClient({ url: process.env.REDIS_URL });
+  await client.connect();
+
+  const rawList = await client.lRange('code_list', 0, 49);
+
+  // 각 코드의 최신 상태를 Redis에서 다시 확인
+  const codes = await Promise.all(
+    rawList.map(async (raw) => {
+      const item = JSON.parse(raw);
+      const latest = await client.get(`code:${item.code}`);
+      return latest ? JSON.parse(latest) : item;
+    })
+  );
+
+  await client.disconnect();
+  return res.status(200).json({ success: true, codes });
 }
