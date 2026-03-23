@@ -473,7 +473,17 @@ textarea{resize:vertical;min-height:64px}
             <div class="gen-code-display" id="gen-code-display">------</div>
             <button class="btn-gen-code" onclick="generateCode()">새 코드 생성</button>
           </div>
-          <div style="font-size:11px;color:var(--ink3);margin-top:6px">생성된 코드를 고객 카카오톡으로 직접 전송해주세요</div>
+          <div style="margin-top:10px">
+            <div style="font-size:11px;color:var(--ink3);margin-bottom:5px">고객에게 보낼 링크 (카카오톡으로 전송)</div>
+            <div style="display:flex;gap:6px">
+              <input id="gen-link-display" readonly placeholder="코드 생성 후 링크가 나타납니다"
+                style="flex:1;font-size:11px;font-family:monospace;background:var(--paper2)"/>
+              <button onclick="copyLink()" style="padding:8px 12px;background:var(--ink);color:var(--paper);border:none;font-size:11px;cursor:pointer;border-radius:3px;white-space:nowrap">복사</button>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--ink3);margin-top:6px">
+            ※ 이 링크를 고객에게 카카오톡으로 보내면 → 접속 즉시 자동 인증돼요
+          </div>
         </div>
 
         <!-- 발급 내역 -->
@@ -566,7 +576,8 @@ const CFG = {
   HOLDER:     '차호윤',
   ADMIN_PW:   '0640',
   SIGN_API:   '/api/send-sign',
-  TEST_MODE:  true
+  TEST_MODE:  true,
+  MASTER_CODES: []  // 생성된 코드가 여기에 자동 추가됨
 };
 // ══════════════════════════════════════
 
@@ -635,24 +646,40 @@ function copyAccount(){
   });
 }
 
-// ── 인증코드 검증 (서버 API) ──
-async function verifyCode(){
+// ── 인증코드 검증 ──
+// 방식1: 고객이 직접 코드 입력
+// 방식2: 운영자가 보낸 ?code=XXXXXX 링크로 자동 인증
+function verifyCode(){
   const code = v('code-input').toUpperCase().trim();
   if(code.length < 4){
     $('verify-msg').className='verify-msg err';
     $('verify-msg').textContent='인증코드를 입력해주세요';
     return;
   }
-  $('verify-msg').className='verify-msg';
-  $('verify-msg').textContent='확인 중...';
-  try {
-    const res = await fetch('/api/verify-code', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ code })
-    });
-    const data = await res.json();
+  checkCode(code);
+}
+
+function checkCode(code){
+  // 유효한 코드 목록: 관리자가 생성한 코드를 여기에 추가
+  // 사용된 코드는 sessionStorage로 중복 방지
+  const usedCodes = JSON.parse(sessionStorage.getItem('used') || '[]');
+  if(usedCodes.includes(code)){
+    $('verify-msg').className='verify-msg err';
+    $('verify-msg').textContent='이미 사용된 코드입니다';
+    return;
+  }
+
+  // 서버 API 호출 (파일이 없으면 관리자 직접 코드 방식으로 폴백)
+  fetch('/api/verify-code', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({code})
+  })
+  .then(r=>r.json())
+  .then(data=>{
     if(data.success){
+      usedCodes.push(code);
+      sessionStorage.setItem('used', JSON.stringify(usedCodes));
       $('verify-msg').className='verify-msg ok';
       $('verify-msg').textContent='✓ 인증 완료!';
       setTimeout(()=>{ closeModal('transfer-modal'); activateForm(); }, 800);
@@ -660,10 +687,21 @@ async function verifyCode(){
       $('verify-msg').className='verify-msg err';
       $('verify-msg').textContent = data.message || '올바르지 않은 코드입니다';
     }
-  } catch(e) {
-    $('verify-msg').className='verify-msg err';
-    $('verify-msg').textContent='서버 오류. 잠시 후 다시 시도해주세요';
-  }
+  })
+  .catch(()=>{
+    // API 서버 없을 때: 관리자가 직접 설정한 마스터 코드로 검증
+    const masterCodes = CFG.MASTER_CODES || [];
+    if(masterCodes.includes(code)){
+      usedCodes.push(code);
+      sessionStorage.setItem('used', JSON.stringify(usedCodes));
+      $('verify-msg').className='verify-msg ok';
+      $('verify-msg').textContent='✓ 인증 완료!';
+      setTimeout(()=>{ closeModal('transfer-modal'); activateForm(); }, 800);
+    } else {
+      $('verify-msg').className='verify-msg err';
+      $('verify-msg').textContent='올바르지 않은 코드입니다';
+    }
+  });
 }
 
 // ── 폼 활성화 ──
@@ -699,53 +737,45 @@ function saveAccountConfig(){
   alert('계좌 변경은 index.html 파일 상단 CFG 설정에서 직접 수정 후 GitHub에 다시 올려주세요.\n\nCFG.BANK, CFG.ACCOUNT, CFG.HOLDER 값을 변경하면 됩니다.');
 }
 
-// ── 인증코드 생성 (서버 API) ──
-async function generateCode(){
-  $('gen-code-display').textContent = '생성 중...';
-  try {
-    const res = await fetch('/api/generate-code', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ adminPw: v('admin-pw') || CFG.ADMIN_PW })
-    });
-    const data = await res.json();
-    if(data.success){
-      $('gen-code-display').textContent = data.code;
-      renderOrderList();
-    } else {
-      $('gen-code-display').textContent = '오류';
-      alert(data.message);
-    }
-  } catch(e) {
-    $('gen-code-display').textContent = '오류';
-    alert('서버 오류: ' + e.message);
-  }
+// ── 인증코드 생성 ──
+function generateCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for(let i=0;i<6;i++) code += chars[Math.floor(Math.random()*chars.length)];
+
+  // 생성된 코드를 CFG.MASTER_CODES에 추가 (페이지 새로고침 전까지 유효)
+  if(!CFG.MASTER_CODES) CFG.MASTER_CODES = [];
+  CFG.MASTER_CODES.push(code);
+
+  // 발급 내역 저장
+  let history = JSON.parse(localStorage.getItem('code_history') || '[]');
+  history.unshift({ code, created: new Date().toLocaleTimeString('ko-KR'), used: false });
+  if(history.length > 50) history = history.slice(0,50);
+  localStorage.setItem('code_history', JSON.stringify(history));
+
+  $('gen-code-display').textContent = code;
+
+  // 고객에게 보낼 링크 자동 생성
+  const link = location.origin + '?code=' + code;
+  $('gen-link-display').value = link;
+
+  renderOrderList();
 }
 
-async function renderOrderList(){
+function renderOrderList(){
   const list = $('order-list');
-  list.innerHTML = '<div style="font-size:12px;color:var(--ink3);text-align:center;padding:12px">불러오는 중...</div>';
-  try {
-    const res = await fetch('/api/list-codes', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ adminPw: CFG.ADMIN_PW })
-    });
-    const data = await res.json();
-    if(!data.codes?.length){
-      list.innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:12px">발급 내역 없음</div>';
-      return;
-    }
-    list.innerHTML = data.codes.slice(0,20).map(c=>`
-      <div class="order-row">
-        <span class="ot">${c.created}</span>
-        <span class="oc">${c.code}</span>
-        <span class="os ${c.used?'used':'ready'}">${c.used?'사용됨':'대기중'}</span>
-      </div>
-    `).join('');
-  } catch(e) {
-    list.innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:12px">불러오기 실패</div>';
+  const history = JSON.parse(localStorage.getItem('code_history') || '[]');
+  if(!history.length){
+    list.innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:12px">발급 내역 없음</div>';
+    return;
   }
+  list.innerHTML = history.slice(0,20).map(c=>`
+    <div class="order-row">
+      <span class="ot">${c.created}</span>
+      <span class="oc">${c.code}</span>
+      <span class="os ready">대기중</span>
+    </div>
+  `).join('');
 }
 
 // ── 차용증 생성 ──
@@ -762,12 +792,13 @@ async function generateDoc(){
 이자지급: ${$('im').value} / 변제방법: ${$('rm').value}
 특약: ${v('sp')||'없음'}`;
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
+    const res=await fetch('/api/generate-doc',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({prompt})
     });
     const data=await res.json();
-    const text=data.content.map(c=>c.text||'').join('');
+    if(!data.success) throw new Error(data.message||'오류');
+    const text=data.text;
     $('docbody').innerHTML=text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
     $('sigl').textContent=lName+' (인)';$('sigla').textContent=v('la');
     $('sigb').textContent=bName+' (인)';$('sigba').textContent=v('ba');
@@ -792,6 +823,35 @@ async function downloadPDF(){
     pdf.save('차용증_'+new Date().toLocaleDateString('ko-KR').replace(/[\. ]/g,'').replace('.','')+ '.pdf');
   }finally{hideLoader()}
 }
+
+// ── 링크 복사 ──
+function copyLink(){
+  const link = $('gen-link-display').value;
+  if(!link || link.includes('코드 생성')) return;
+  navigator.clipboard.writeText(link).then(()=>{
+    const btn = event.target;
+    btn.textContent='복사됨 ✓';
+    setTimeout(()=>btn.textContent='복사', 1500);
+  });
+}
+
+// ── URL에 code 파라미터 있으면 자동 인증 ──
+(function(){
+  const p = new URLSearchParams(location.search);
+  const urlCode = p.get('code');
+  if(urlCode){
+    // 잠금화면이 로드된 후 자동 인증
+    window.addEventListener('load', ()=>{
+      setTimeout(()=>{
+        $('code-input').value = urlCode;
+        $('verify-msg').className='verify-msg';
+        $('verify-msg').textContent='링크 인증 확인 중...';
+        openTransferModal();
+        setTimeout(()=>checkCode(urlCode.toUpperCase()), 500);
+      }, 300);
+    });
+  }
+})();
 
 // ── 서명 모달 ──
 function openSignModal(){
