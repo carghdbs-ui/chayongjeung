@@ -395,7 +395,7 @@ textarea{resize:vertical;min-height:60px}
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="14" rx="2" stroke="white" stroke-width="1.5"/><path d="M2 10h20" stroke="white" stroke-width="1.5"/></svg>
           계좌이체 안내 보기
         </button>
-        <button class="btn-free" onclick="openAdminPanel()">관리자</button>
+        <!-- 관리자: ?admin=true 로만 접근 가능 -->
       </div>
     </div>
 
@@ -718,7 +718,7 @@ const CONTRACTS = {
       <div class="sec">수임인 (대리인)</div>
       <div class="row2"><div class="field"><label>성명</label><input id="f_bn" placeholder="김철수"/></div><div class="field"><label>주민등록번호</label><input id="f_bi" placeholder="000000-0000000"/></div></div>
       <div class="field"><label>주소</label><input id="f_ba" placeholder="서울시 서초구"/></div>
-      <div class="field"><label>위임 사항</label><textarea id="f_sp" placeholder="부동산 매매 계약 체결에 관한 일체의 권한, 법원 제출 서류 접수 등" style="min-height:80px"/></div>
+      <div class="field"><label>위임 사항</label><textarea id="f_sp" placeholder="부동산 매매 계약 체결에 관한 일체의 권한, 법원 제출 서류 접수 등" style="min-height:80px"></textarea></div>
       <div class="row2"><div class="field"><label>위임 기간 시작</label><input id="f_ds" type="date"/></div><div class="field"><label>위임 기간 종료</label><input id="f_de" type="date"/></div></div>`,
     prompt: (f) => `위임장 본문을 작성해주세요.
 위임인: ${f.ln}(${f.li||'주민번호미기재'}) / ${f.la||'주소미기재'}
@@ -790,9 +790,9 @@ const CONTRACTS = {
       <div class="field"><label>주소</label><input id="f_ba" placeholder="서울시 서초구"/></div>
       <div class="field"><label>휴대폰 번호</label><input id="f_bp" placeholder="010-0000-0000"/></div>
       <div class="sec">합의 내용</div>
-      <div class="field"><label>분쟁 경위</label><textarea id="f_background" placeholder="교통사고, 금전 분쟁, 폭행 사건 등 경위 입력"/></div>
+      <div class="field"><label>분쟁 경위</label><textarea id="f_background" placeholder="교통사고, 금전 분쟁, 폭행 사건 등 경위 입력"></textarea></div>
       <div class="field"><label>합의 금액 (원)</label><input id="f_amt" type="number" placeholder="1000000"/></div>
-      <div class="field"><label>합의 조건</label><textarea id="f_sp" placeholder="민형사상 이의 제기 않기로 합의, 추가 청구 없음 등"/></div>
+      <div class="field"><label>합의 조건</label><textarea id="f_sp" placeholder="민형사상 이의 제기 않기로 합의, 추가 청구 없음 등"></textarea></div>
       <div class="field"><label>합의일</label><input id="f_ds" type="date"/></div>`,
     prompt: (f) => `합의서 본문을 작성해주세요.
 갑: ${f.ln}(${f.li||'주민번호미기재'}) / ${f.la}
@@ -813,7 +813,7 @@ const CONTRACTS = {
       <div class="sec">수령인</div>
       <div class="row2"><div class="field"><label>성명 또는 기관명</label><input id="f_bn" placeholder="김철수 또는 ○○회사"/></div></div>
       <div class="sec">각서 내용</div>
-      <div class="field"><label>각서 내용</label><textarea id="f_sp" placeholder="향후 동일한 행위를 반복하지 않겠습니다. 위반 시 ○○에 동의합니다 등" style="min-height:100px"/></div>
+      <div class="field"><label>각서 내용</label><textarea id="f_sp" placeholder="향후 동일한 행위를 반복하지 않겠습니다. 위반 시 ○○에 동의합니다 등" style="min-height:100px"></textarea></div>
       <div class="field"><label>작성일</label><input id="f_ds" type="date"/></div>`,
     prompt: (f) => `각서 본문을 작성해주세요.
 작성인: ${f.ln}(${f.li||'주민번호미기재'}) / ${f.la}
@@ -835,7 +835,7 @@ const CONTRACTS = {
       <div class="field"><label>주소</label><input id="f_ba" placeholder="서울시 서초구"/></div>
       <div class="sec">내용</div>
       <div class="field"><label>제목</label><input id="f_job" placeholder="계약 해제 통보, 채무 이행 촉구 등"/></div>
-      <div class="field"><label>상세 내용</label><textarea id="f_sp" placeholder="구체적인 사실관계와 요구사항 입력" style="min-height:100px"/></div>
+      <div class="field"><label>상세 내용</label><textarea id="f_sp" placeholder="구체적인 사실관계와 요구사항 입력" style="min-height:100px"></textarea></div>
       <div class="field"><label>발송일</label><input id="f_ds" type="date"/></div>`,
     prompt: (f) => `내용증명 본문을 작성해주세요.
 발신인: ${f.ln}(${f.li||'주민번호미기재'}) / ${f.la}
@@ -857,7 +857,7 @@ const CONTRACTS = {
       <div class="field"><label>주소</label><input id="f_ba" placeholder="서울시 서초구"/></div>
       <div class="field"><label>휴대폰 번호</label><input id="f_bp" placeholder="010-0000-0000"/></div>
       <div class="sec">계약 조건</div>
-      <div class="field"><label>비밀 정보 범위</label><textarea id="f_sp" placeholder="사업계획서, 고객 정보, 기술 자료, 재무 정보 등"/></div>
+      <div class="field"><label>비밀 정보 범위</label><textarea id="f_sp" placeholder="사업계획서, 고객 정보, 기술 자료, 재무 정보 등"></textarea></div>
       <div class="row2"><div class="field"><label>계약 시작일</label><input id="f_ds" type="date"/></div><div class="field"><label>유효 기간 (년)</label><input id="f_period" type="number" placeholder="3"/></div></div>`,
     prompt: (f) => `비밀유지계약서(NDA) 본문을 작성해주세요.
 갑: ${f.ln} / ${f.la}
@@ -907,7 +907,7 @@ DEFAULT_CONTRACTS.forEach(name => {
       <div class="field"><label>휴대폰 번호</label><input id="f_bp" placeholder="010-0000-0000"/></div>
       <div class="sec">계약 내용</div>
       <div class="row2"><div class="field"><label>계약 시작일</label><input id="f_ds" type="date"/></div><div class="field"><label>계약 종료일</label><input id="f_de" type="date"/></div></div>
-      <div class="field"><label>주요 내용</label><textarea id="f_sp" placeholder="계약의 주요 내용을 입력해주세요" style="min-height:100px"/></div>`,
+      <div class="field"><label>주요 내용</label><textarea id="f_sp" placeholder="계약의 주요 내용을 입력해주세요" style="min-height:100px"></textarea></div>`,
     prompt: (f) => `${name} 본문을 한국 법률에 맞게 작성해주세요.
 갑: ${f.ln} / ${f.la}
 을: ${f.bn} / ${f.ba}
