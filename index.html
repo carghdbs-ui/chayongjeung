@@ -729,41 +729,52 @@ function saveAccountConfig(){
 }
 
 // ── 인증코드 생성 ──
-function generateCode(){
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for(let i=0;i<6;i++) code += chars[Math.floor(Math.random()*chars.length)];
-
-  // 생성된 코드를 CFG.MASTER_CODES에 추가 (페이지 새로고침 전까지 유효)
-  if(!CFG.MASTER_CODES) CFG.MASTER_CODES = [];
-  CFG.MASTER_CODES.push(code);
-
-  // 발급 내역 저장
-  let history = JSON.parse(localStorage.getItem('code_history') || '[]');
-  history.unshift({ code, created: new Date().toLocaleTimeString('ko-KR'), used: false });
-  if(history.length > 50) history = history.slice(0,50);
-  localStorage.setItem('code_history', JSON.stringify(history));
-
-  $('gen-code-display').textContent = code;
-
-
-  renderOrderList();
+async function generateCode(){
+  $('gen-code-display').textContent = '생성 중...';
+  try {
+    const res = await fetch('/api/generate-code', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ adminPw: CFG.ADMIN_PW })
+    });
+    const data = await res.json();
+    if(data.success){
+      $('gen-code-display').textContent = data.code;
+      renderOrderList();
+    } else {
+      $('gen-code-display').textContent = '오류';
+      alert('코드 생성 실패: ' + data.message);
+    }
+  } catch(e) {
+    $('gen-code-display').textContent = '오류';
+    alert('서버 오류: ' + e.message);
+  }
 }
 
-function renderOrderList(){
+async function renderOrderList(){
   const list = $('order-list');
-  const history = JSON.parse(localStorage.getItem('code_history') || '[]');
-  if(!history.length){
-    list.innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:12px">발급 내역 없음</div>';
-    return;
+  list.innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:12px">불러오는 중...</div>';
+  try {
+    const res = await fetch('/api/list-codes', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ adminPw: CFG.ADMIN_PW })
+    });
+    const data = await res.json();
+    if(!data.codes?.length){
+      list.innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:12px">발급 내역 없음</div>';
+      return;
+    }
+    list.innerHTML = data.codes.slice(0,20).map(c=>`
+      <div class="order-row">
+        <span class="ot">${c.created}</span>
+        <span class="oc">${c.code}</span>
+        <span class="os ${c.used?'used':'ready'}">${c.used?'사용됨':'대기중'}</span>
+      </div>
+    `).join('');
+  } catch(e) {
+    list.innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:12px">불러오기 실패</div>';
   }
-  list.innerHTML = history.slice(0,20).map(c=>`
-    <div class="order-row">
-      <span class="ot">${c.created}</span>
-      <span class="oc">${c.code}</span>
-      <span class="os ready">대기중</span>
-    </div>
-  `).join('');
 }
 
 // ── 차용증 생성 ──
