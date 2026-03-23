@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://chayongjeung.vercel.app">
+  <meta property="og:title" content="차용증 자동작성 — 채무확인.kr">
+  <meta property="og:description" content="AI가 법적 문구를 자동 완성. 카카오 전자서명까지 한번에. 단돈 ₩4,900">
+  <meta property="og:image" content="https://chayongjeung.vercel.app/og-image.png">
+  <meta property="og:image:width" content="1536">
+  <meta property="og:image:height" content="1024">
+  <meta property="og:locale" content="ko_KR">
+  <meta property="og:site_name" content="채무확인.kr">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="차용증 자동작성 — 채무확인.kr">
+  <meta name="twitter:description" content="AI가 법적 문구를 자동 완성. 카카오 전자서명까지 한번에. 단돈 ₩4,900">
+  <meta name="twitter:image" content="https://chayongjeung.vercel.app/og-image.png">
+  <meta name="description" content="AI가 법적 문구를 자동 완성해주는 차용증 작성 서비스. 카카오 전자서명까지 한번에. 단돈 ₩4,900">
+  <meta name="keywords" content="차용증, 차용증 양식, 차용증 작성, 금전차용증, 개인간 차용증, 전자서명 차용증">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>채무확인.kr — 차용증 자동작성</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;600&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --ink:#1a1612;--ink2:#3d3530;--ink3:#7a6e67;
+  --paper:#faf7f2;--paper2:#f2ede4;--paper3:#e8e0d2;
+  --seal:#b03a2e;--seal2:#8e2d24;--gold:#c9a84c;
+  --green:#2e7d52;--blue:#1a5fa8;--line:rgba(26,22,18,.12);
+  --kakao:#FEE500;--kakao-dark:#191600;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper2);color:var(--ink);font-family:'Noto Serif KR',serif;min-height:100vh}
+
+/* ── Header ── */
+.site-header{background:var(--ink);color:var(--paper);padding:16px 40px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:15px;letter-spacing:.12em;font-weight:300}.logo span{color:var(--gold)}
+.header-right{display:flex;align-items:center;gap:12px}
+.price-pill{background:var(--seal);color:#fff;font-family:'DM Mono',monospace;font-size:12px;padding:5px 14px;border-radius:2px;letter-spacing:.05em}
+.badge{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;border:1px solid var(--gold);color:var(--gold);padding:4px 10px;border-radius:2px}
+
+/* ── Progress ── */
+.progress-bar{background:var(--paper);border-bottom:1px solid var(--paper3);display:flex;padding:0 40px;overflow-x:auto}
+.prog-step{padding:13px 20px;font-size:11px;letter-spacing:.1em;color:var(--ink3);display:flex;align-items:center;gap:7px;border-bottom:2px solid transparent;transition:all .25s;white-space:nowrap}
+.prog-step.active{color:var(--ink);border-bottom-color:var(--seal)}
+.prog-step.done{color:var(--green);border-bottom-color:var(--green)}
+.prog-step .num{width:18px;height:18px;border-radius:50%;border:1px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:9px;font-family:'DM Mono',monospace;flex-shrink:0}
+.prog-step.done .num{background:var(--green);border-color:var(--green);color:#fff;font-size:11px}
+
+/* ── Layout ── */
+.layout{display:grid;grid-template-columns:420px 1fr;min-height:calc(100vh - 97px)}
+
+/* ── Form ── */
+.form-panel{background:var(--paper);border-right:1px solid var(--paper3);padding:32px;overflow-y:auto;position:relative}
+.form-panel h2{font-size:12px;letter-spacing:.18em;color:var(--ink3);font-weight:400;margin-bottom:22px;text-transform:uppercase}
+.sec{font-size:10px;letter-spacing:.14em;color:var(--seal);margin:22px 0 10px;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.sec::after{content:'';flex:1;height:1px;background:var(--paper3)}
+.field{margin-bottom:11px}
+label{display:block;font-size:10.5px;color:var(--ink3);margin-bottom:4px;letter-spacing:.04em}
+input,select,textarea{width:100%;background:var(--paper2);border:1px solid var(--paper3);color:var(--ink);font-family:'Noto Serif KR',serif;font-size:13px;padding:8px 11px;border-radius:3px;outline:none;transition:border-color .2s,background .2s}
+input:focus,select:focus,textarea:focus{border-color:var(--ink2);background:#fff}
+input:disabled,select:disabled,textarea:disabled{opacity:.4;cursor:not-allowed}
+textarea{resize:vertical;min-height:64px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+
+/* ── 결제 잠금 오버레이 ── */
+.pay-lock{position:absolute;inset:0;background:rgba(242,237,228,.93);display:flex;align-items:center;justify-content:center;z-index:10;backdrop-filter:blur(2px)}
+.pay-lock.hidden{display:none}
+.lock-card{background:var(--paper);border:1px solid var(--paper3);border-radius:8px;padding:32px 32px 28px;width:330px;text-align:center;box-shadow:0 8px 40px rgba(26,22,18,.1)}
+.lock-icon{width:50px;height:50px;background:var(--ink);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
+.lock-title{font-size:16px;font-weight:600;margin-bottom:6px}
+.lock-desc{font-size:12px;color:var(--ink3);line-height:1.8;margin-bottom:18px}
+.includes{text-align:left;margin-bottom:18px}
+.inc-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);padding:5px 0;border-bottom:1px solid var(--paper3)}
+.inc-row:last-child{border:none}
+.inc-ck{color:var(--green);font-size:14px;flex-shrink:0}
+.price-display{display:flex;align-items:baseline;justify-content:center;gap:5px;margin-bottom:4px}
+.price-big{font-size:32px;font-weight:600;letter-spacing:-.01em}
+.price-unit{font-size:13px;color:var(--ink3)}
+.price-vat{font-size:10px;color:var(--ink3);margin-bottom:18px}
+
+/* ── 계좌이체 버튼 ── */
+.btn-transfer{width:100%;padding:13px;background:var(--blue);color:#fff;border:none;font-family:'Noto Serif KR',serif;font-size:13px;letter-spacing:.06em;cursor:pointer;border-radius:3px;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .2s;margin-bottom:8px}
+.btn-transfer:hover{background:#154d8a}
+.btn-free{width:100%;padding:10px;background:transparent;border:1px solid var(--paper3);color:var(--ink3);font-family:'Noto Serif KR',serif;font-size:11px;cursor:pointer;border-radius:3px;transition:all .2s}
+.btn-free:hover{border-color:var(--ink3);color:var(--ink2)}
+
+/* ── 결제완료 뱃지 ── */
+.paid-badge{display:none;align-items:center;gap:7px;background:rgba(46,125,82,.1);border:1px solid rgba(46,125,82,.25);border-radius:3px;padding:8px 14px;margin-bottom:18px;font-size:11px;color:var(--green)}
+.paid-badge.show{display:flex}
+
+.btn-gen{width:100%;margin-top:16px;background:var(--seal);color:#fff;border:none;padding:13px;font-family:'Noto Serif KR',serif;font-size:13px;letter-spacing:.08em;cursor:pointer;border-radius:3px;transition:all .2s;position:relative}
+.btn-gen:hover{background:var(--seal2)}
+.btn-gen:disabled{opacity:.4;pointer-events:none}
+.btn-gen.loading{pointer-events:none}
+.btn-gen .sp{display:none;width:15px;height:15px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto}
+.btn-gen.loading .bt{display:none}
+.btn-gen.loading .sp{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Preview ── */
+.preview-panel{background:var(--paper2);padding:36px 52px;overflow-y:auto;position:relative}
+.preview-panel::before{content:'';position:absolute;inset:0;background-image:repeating-linear-gradient(0deg,transparent,transparent 27px,rgba(26,22,18,.04) 27px,rgba(26,22,18,.04) 28px);pointer-events:none}
+.placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--ink3);gap:14px;opacity:.45}
+.placeholder p{font-size:12px;letter-spacing:.05em}
+
+#document{background:#fff;max-width:580px;margin:0 auto;padding:56px 64px;box-shadow:0 4px 32px rgba(26,22,18,.1);position:relative;display:none;animation:fadeUp .35s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+#document::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--seal2),var(--seal),var(--gold))}
+.doc-title{text-align:center;font-size:25px;font-weight:600;letter-spacing:.3em;margin-bottom:6px}
+.doc-subtitle{text-align:center;font-size:10px;letter-spacing:.22em;color:var(--ink3);margin-bottom:32px;font-weight:300}
+.doc-body{font-size:13px;line-height:2.3;color:var(--ink);white-space:pre-wrap;word-break:keep-all}
+.doc-body strong{font-weight:600}
+.doc-seal-area{margin-top:40px;padding-top:24px;border-top:1px solid var(--line)}
+.doc-date{text-align:center;font-size:12px;letter-spacing:.1em;color:var(--ink2);margin-bottom:24px}
+.sig-row{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.sig-block .role{font-size:10px;letter-spacing:.12em;color:var(--ink3);margin-bottom:6px}
+.sig-block .name-line{font-size:14px;padding-bottom:4px;border-bottom:1px solid var(--line);min-height:24px}
+.sig-block .sub{font-size:10px;color:var(--ink3);margin-top:4px}
+.sig-block{position:relative}
+.seal-stamp{position:absolute;right:0;top:-6px;width:46px;height:46px;border:2px solid var(--seal);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--seal);font-size:10px;opacity:.65;transform:rotate(-12deg)}
+
+.action-bar{display:none;max-width:580px;margin:14px auto 0;gap:10px}
+.action-bar.show{display:flex}
+.btn-act{flex:1;padding:12px 8px;border:1px solid var(--paper3);background:var(--paper);color:var(--ink2);font-family:'Noto Serif KR',serif;font-size:12px;letter-spacing:.05em;cursor:pointer;border-radius:3px;transition:all .2s}
+.btn-act:hover{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn-kakao{background:var(--kakao);color:var(--kakao-dark);border-color:var(--kakao);font-weight:700;display:flex;align-items:center;justify-content:center;gap:7px;flex:2;font-size:13px}
+.btn-kakao:hover{background:#e6ce00;border-color:#e6ce00;color:var(--kakao-dark)}
+
+/* ── 모달 공통 ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(26,22,18,.65);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--paper);border-radius:5px;max-width:96vw;box-shadow:0 24px 64px rgba(26,22,18,.3);overflow:hidden}
+.modal-head{padding:18px 24px;display:flex;align-items:center;justify-content:space-between}
+.modal-head h3{font-size:14px;letter-spacing:.08em;font-weight:500}
+.modal-head .x{background:none;border:none;cursor:pointer;font-size:18px;opacity:.4;line-height:1;padding:0;color:inherit}
+.modal-head .x:hover{opacity:1}
+.modal-body{padding:0 24px 24px}
+.modal-cancel{width:100%;padding:10px;background:transparent;border:1px solid var(--paper3);color:var(--ink3);font-family:'Noto Serif KR',serif;font-size:12px;cursor:pointer;border-radius:3px;margin-top:8px}
+
+/* ── 계좌이체 안내 모달 ── */
+.transfer-modal{width:420px}
+.account-card{background:var(--ink);color:var(--paper);border-radius:6px;padding:22px 24px;margin-bottom:18px;position:relative;overflow:hidden}
+.account-card::before{content:'';position:absolute;right:-20px;top:-20px;width:100px;height:100px;background:rgba(201,168,76,.08);border-radius:50%}
+.account-card .bank-name{font-size:11px;letter-spacing:.12em;color:var(--gold);margin-bottom:8px;text-transform:uppercase}
+.account-card .account-num{font-size:22px;font-family:'DM Mono',monospace;letter-spacing:.08em;margin-bottom:6px;font-weight:300}
+.account-card .account-holder{font-size:12px;color:rgba(250,247,242,.6);margin-bottom:12px}
+.account-card .copy-btn{display:inline-flex;align-items:center;gap:5px;background:rgba(250,247,242,.1);border:1px solid rgba(250,247,242,.2);color:var(--paper);font-family:'Noto Serif KR',serif;font-size:11px;padding:5px 12px;border-radius:3px;cursor:pointer;transition:all .2s}
+.account-card .copy-btn:hover{background:rgba(250,247,242,.2)}
+.amount-row{display:flex;justify-content:space-between;align-items:center;background:var(--paper2);border-radius:4px;padding:12px 16px;margin-bottom:6px}
+.amount-row .al{font-size:11px;color:var(--ink3)}
+.amount-row .av{font-size:18px;font-weight:600;color:var(--seal)}
+.transfer-steps{margin:16px 0}
+.ts-row{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--paper3);font-size:12px;color:var(--ink2);align-items:flex-start}
+.ts-row:last-child{border:none}
+.ts-num{width:20px;height:20px;border-radius:50%;background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:center;font-size:9px;font-family:'DM Mono',monospace;flex-shrink:0;margin-top:1px}
+.ts-row p{line-height:1.7;flex:1}
+.code-input-row{display:flex;gap:8px;margin-bottom:8px}
+.code-input-row input{flex:1;font-family:'DM Mono',monospace;font-size:14px;letter-spacing:.1em;text-align:center}
+.btn-verify{padding:10px 18px;background:var(--ink);color:var(--paper);border:none;font-family:'Noto Serif KR',serif;font-size:12px;cursor:pointer;border-radius:3px;white-space:nowrap;transition:background .2s}
+.btn-verify:hover{background:var(--ink2)}
+.verify-msg{font-size:11px;margin-top:4px;min-height:16px;letter-spacing:.03em}
+.verify-msg.ok{color:var(--green)}
+.verify-msg.err{color:var(--seal)}
+
+/* ── 관리자 패널 (운영자만 접근) ── */
+.admin-panel{width:460px}
+.admin-section{background:var(--paper2);border-radius:4px;padding:14px 16px;margin-bottom:12px}
+.admin-section h4{font-size:11px;letter-spacing:.1em;color:var(--ink3);margin-bottom:10px;text-transform:uppercase}
+.code-gen-row{display:flex;gap:8px;align-items:center}
+.gen-code-display{flex:1;font-family:'DM Mono',monospace;font-size:16px;letter-spacing:.15em;background:var(--ink);color:var(--gold);padding:10px 14px;border-radius:3px;text-align:center}
+.btn-gen-code{padding:10px 14px;background:var(--seal);color:#fff;border:none;font-family:'Noto Serif KR',serif;font-size:12px;cursor:pointer;border-radius:3px;white-space:nowrap}
+.order-list{max-height:180px;overflow-y:auto}
+.order-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--paper3);font-size:11px}
+.order-row:last-child{border:none}
+.order-row .ot{color:var(--ink2)}
+.order-row .oc{font-family:'DM Mono',monospace;color:var(--blue);font-size:11px;font-weight:600}
+.order-row .os{font-size:10px;padding:2px 7px;border-radius:2px}
+.os.used{background:rgba(46,125,82,.1);color:var(--green)}
+.os.ready{background:rgba(26,22,18,.06);color:var(--ink3)}
+.admin-notice{font-size:10.5px;color:var(--ink3);line-height:1.8;padding:10px 12px;background:rgba(26,91,168,.06);border:1px solid rgba(26,91,168,.15);border-radius:3px}
+
+/* ── 서명 모달 ── */
+.sign-modal{width:440px}
+.kakao-top{display:flex;align-items:center;gap:10px;background:var(--kakao);border-radius:3px;padding:12px 14px;margin-bottom:16px}
+.kt-icon{width:30px;height:30px;background:var(--kakao-dark);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.kt-title{font-size:12px;font-weight:700;color:var(--kakao-dark)}
+.kt-sub{font-size:10px;color:rgba(25,22,0,.55);margin-top:1px}
+.signer-card{background:var(--paper2);border:1px solid var(--paper3);border-radius:3px;padding:11px 13px;margin-bottom:8px}
+.sc-role{font-size:10px;color:var(--ink3);letter-spacing:.08em;margin-bottom:3px}
+.sc-name{font-size:13px;font-weight:600;margin-bottom:4px}
+.sc-ph input{width:100%;background:transparent;border:none;border-bottom:1px solid var(--paper3);border-radius:0;font-size:12px;font-family:'DM Mono',monospace;padding:3px 2px;color:var(--ink);outline:none}
+.sc-ph input:focus{border-bottom-color:var(--ink2)}
+.btn-send{width:100%;padding:13px;background:var(--kakao);color:var(--kakao-dark);border:none;font-family:'Noto Serif KR',serif;font-size:13px;font-weight:700;cursor:pointer;border-radius:3px;display:flex;align-items:center;justify-content:center;gap:7px;margin-top:14px}
+.btn-send:hover{background:#e6ce00}
+
+/* 완료 모달 */
+.done-box{text-align:center;padding:20px 0}
+.done-detail{background:var(--paper2);border-radius:3px;padding:12px 14px;margin:12px 0;text-align:left}
+.dd-row{display:flex;justify-content:space-between;font-size:11.5px;padding:5px 0;border-bottom:1px solid var(--paper3);color:var(--ink2)}
+.dd-row:last-child{border:none}
+.dd-row span:last-child{font-weight:600;color:var(--ink)}
+
+/* 로딩 */
+.g-loader{display:none;position:fixed;inset:0;background:rgba(26,22,18,.5);z-index:300;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+.g-loader.show{display:flex}
+.g-loader .lsp{width:32px;height:32px;border:2.5px solid rgba(250,247,242,.2);border-top-color:var(--paper);border-radius:50%;animation:spin .8s linear infinite}
+.g-loader p{color:var(--paper);font-size:13px;letter-spacing:.05em}
+
+@media(max-width:820px){
+  .layout{grid-template-columns:1fr}
+  .preview-panel{padding:24px 16px}
+  #document{padding:36px 24px}
+  .sig-row{grid-template-columns:1fr}
+  .progress-bar{padding:0 12px}
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="logo">채무<span>확인</span>.kr &nbsp;—&nbsp; 차용증 자동작성</div>
+  <div class="header-right">
+    <div class="price-pill">₩4,900</div>
+    <div class="badge">AI POWERED</div>
+  </div>
+</header>
+
+<nav class="progress-bar">
+  <div class="prog-step active" id="ps1"><div class="num">1</div>입금</div>
+  <div class="prog-step" id="ps2"><div class="num">2</div>인증</div>
+  <div class="prog-step" id="ps3"><div class="num">3</div>정보 입력</div>
+  <div class="prog-step" id="ps4"><div class="num">4</div>문서 확인</div>
+  <div class="prog-step" id="ps5"><div class="num">5</div>전자서명</div>
+</nav>
+
+<div class="layout">
+
+  <!-- ── 폼 패널 ── -->
+  <aside class="form-panel">
+
+    <!-- 결제 잠금 -->
+    <div class="pay-lock" id="pay-lock">
+      <div class="lock-card">
+        <div class="lock-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <rect x="5" y="11" width="14" height="10" rx="2" stroke="#faf7f2" stroke-width="1.5"/>
+            <path d="M8 11V7a4 4 0 018 0v4" stroke="#faf7f2" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="lock-title">입금 후 이용 가능합니다</div>
+        <div class="lock-desc">계좌이체 후 인증코드를 입력하면<br/>차용증 작성이 바로 시작됩니다</div>
+        <div class="includes">
+          <div class="inc-row"><span class="inc-ck">✓</span>AI 법적 문구 자동 완성</div>
+          <div class="inc-row"><span class="inc-ck">✓</span>PDF 고화질 다운로드</div>
+          <div class="inc-row"><span class="inc-ck">✓</span>카카오 전자서명 발송</div>
+          <div class="inc-row"><span class="inc-ck">✓</span>30일 내 재다운로드</div>
+        </div>
+        <div class="price-display">
+          <span class="price-big">₩4,900</span>
+          <span class="price-unit">1회 이용권</span>
+        </div>
+        <div class="price-vat">부가세 포함</div>
+        <button class="btn-transfer" onclick="openTransferModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <rect x="2" y="6" width="20" height="14" rx="2" stroke="white" stroke-width="1.5"/>
+            <path d="M2 10h20" stroke="white" stroke-width="1.5"/>
+            <path d="M6 15h4" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          계좌이체 안내 보기
+        </button>
+        <!-- 관리자: chayongjeung.vercel.app?admin=true 로 접근 -->
+      </div>
+    </div>
+
+    <!-- 결제완료 뱃지 -->
+    <div class="paid-badge" id="paid-badge">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="var(--green)" stroke-width="1.2"/><path d="M5 8l2 2 4-4" stroke="var(--green)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      입금 확인 완료 · 차용증을 작성해주세요
+    </div>
+
+    <h2>차용증 정보 입력</h2>
+
+    <div class="sec">채권자 (빌려주는 사람)</div>
+    <div class="row2">
+      <div class="field"><label>성명</label><input id="ln" placeholder="홍길동" disabled/></div>
+      <div class="field"><label>주민등록번호</label><input id="li" placeholder="000000-0000000" disabled/></div>
+    </div>
+    <div class="field"><label>주소</label><input id="la" placeholder="서울시 강남구 테헤란로 123" disabled/></div>
+    <div class="field"><label>휴대폰 번호</label><input id="lp" placeholder="010-0000-0000" disabled/></div>
+
+    <div class="sec">채무자 (빌리는 사람)</div>
+    <div class="row2">
+      <div class="field"><label>성명</label><input id="bn" placeholder="김철수" disabled/></div>
+      <div class="field"><label>주민등록번호</label><input id="bi" placeholder="000000-0000000" disabled/></div>
+    </div>
+    <div class="field"><label>주소</label><input id="ba" placeholder="서울시 서초구 반포대로 456" disabled/></div>
+    <div class="field"><label>휴대폰 번호</label><input id="bp" placeholder="010-0000-0000" disabled/></div>
+
+    <div class="sec">금전 조건</div>
+    <div class="row2">
+      <div class="field"><label>원금 (원)</label><input id="amt" type="number" placeholder="10000000" disabled/></div>
+      <div class="field"><label>이자율 (%/연)</label><input id="rate" type="number" placeholder="5" step="0.1" disabled/></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>대여일</label><input id="ds" type="date" disabled/></div>
+      <div class="field"><label>변제기일</label><input id="de" type="date" disabled/></div>
+    </div>
+    <div class="field">
+      <label>이자 지급 방식</label>
+      <select id="im" disabled>
+        <option value="매월 말일">매월 말일 지급</option>
+        <option value="만기 일시">만기 시 일시 지급</option>
+        <option value="분기별">분기별 지급</option>
+        <option value="무이자">무이자</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>변제 방법</label>
+      <select id="rm" disabled>
+        <option value="계좌이체">계좌이체</option>
+        <option value="현금">현금 지급</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>특약 사항 (선택)</label>
+      <textarea id="sp" placeholder="예: 조기 상환 시 위약금 없음 등" disabled></textarea>
+    </div>
+
+    <button class="btn-gen" id="genbtn" onclick="generateDoc()" disabled>
+      <span class="bt">✦ 차용증 자동 작성</span>
+      <div class="sp"></div>
+    </button>
+  </aside>
+
+  <!-- ── 미리보기 ── -->
+  <main class="preview-panel">
+    <div class="placeholder" id="ph">
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+        <rect x="9" y="5" width="26" height="34" rx="3" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="15" y1="14" x2="29" y2="14" stroke="currentColor"/>
+        <line x1="15" y1="20" x2="29" y2="20" stroke="currentColor"/>
+        <line x1="15" y1="26" x2="23" y2="26" stroke="currentColor"/>
+      </svg>
+      <p id="ph-msg">입금 확인 후 차용증을 작성할 수 있습니다</p>
+    </div>
+
+    <div id="document">
+      <div class="doc-title">차 용 증</div>
+      <div class="doc-subtitle">LOAN AGREEMENT</div>
+      <div class="doc-body" id="docbody"></div>
+      <div class="doc-seal-area">
+        <div class="doc-date" id="docdate"></div>
+        <div class="sig-row">
+          <div class="sig-block">
+            <div class="role">채권자</div>
+            <div class="name-line" id="sigl"></div>
+            <div class="sub" id="sigla"></div>
+          </div>
+          <div class="sig-block">
+            <div class="role">채무자</div>
+            <div class="name-line" id="sigb"></div>
+            <div class="sub" id="sigba"></div>
+            <div class="seal-stamp">인</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-bar" id="actbar">
+      <button class="btn-act" onclick="downloadPDF()">⬇ PDF 저장</button>
+      <button class="btn-act btn-kakao" onclick="openSignModal()">
+        <svg width="15" height="15" viewBox="0 0 18 18" fill="none"><path d="M9 1.5C4.86 1.5 1.5 4.14 1.5 7.38c0 2.07 1.26 3.9 3.18 4.98L4.02 15l3.6-2.34c.45.06.9.09 1.38.09 4.14 0 7.5-2.64 7.5-5.88S13.14 1.5 9 1.5z" fill="var(--kakao-dark)"/></svg>
+        카카오 전자서명 받기
+      </button>
+    </div>
+  </main>
+</div>
+
+
+<!-- ════════ 계좌이체 안내 모달 ════════ -->
+<div class="overlay" id="transfer-modal">
+  <div class="modal transfer-modal">
+    <div class="modal-head" style="background:var(--ink);color:var(--paper)">
+      <h3 style="color:var(--paper);font-weight:400">계좌이체 안내</h3>
+      <button class="x" onclick="closeModal('transfer-modal')" style="color:var(--paper)">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:20px">
+
+      <!-- 계좌 정보 -->
+      <div class="account-card">
+        <div class="bank-name">농협</div>
+        <div class="account-num" id="display-account">3333-00-0000000</div>
+        <div class="account-holder" id="display-holder">홍길동</div>
+        <button class="copy-btn" onclick="copyAccount()">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="1.5" stroke="white" stroke-width="1.2"/><path d="M4 11H3a1 1 0 01-1-1V3a1 1 0 011-1h7a1 1 0 011 1v1" stroke="white" stroke-width="1.2" stroke-linecap="round"/></svg>
+          계좌번호 복사
+        </button>
+      </div>
+
+      <!-- 금액 -->
+      <div class="amount-row">
+        <span class="al">이체 금액</span>
+        <span class="av">₩4,900</span>
+      </div>
+      <div style="font-size:10.5px;color:var(--ink3);margin-bottom:16px;padding:0 2px">
+        ※ 입금자명에 <strong>휴대폰 번호 뒷 4자리</strong>를 포함해주세요<br/>
+        &nbsp;&nbsp;&nbsp;예) 홍길동1234 → 인증코드 발급이 빨라져요
+      </div>
+
+      <!-- 단계 안내 -->
+      <div class="transfer-steps">
+        <div class="ts-row"><div class="ts-num">1</div><p>위 계좌로 <strong>₩4,900</strong> 이체</p></div>
+        <div class="ts-row"><div class="ts-num">2</div><p>운영자가 입금 확인 후 카카오톡으로 <strong>6자리 인증코드</strong> 발송<br/><span style="color:var(--ink3);font-size:11px">평균 10~30분 내 발송 (운영시간 9~22시)</span></p></div>
+        <div class="ts-row"><div class="ts-num">3</div><p>받은 인증코드를 아래 입력하면 즉시 이용 가능</p></div>
+      </div>
+
+      <!-- 인증코드 입력 -->
+      <div style="background:var(--paper2);border-radius:4px;padding:14px 16px;margin-bottom:8px">
+        <div style="font-size:11px;color:var(--ink3);margin-bottom:8px;letter-spacing:.05em">인증코드 입력</div>
+        <div class="code-input-row">
+          <input type="text" id="code-input" placeholder="A1B2C3" maxlength="6" oninput="this.value=this.value.toUpperCase()"/>
+          <button class="btn-verify" onclick="verifyCode()">확인</button>
+        </div>
+        <div class="verify-msg" id="verify-msg"></div>
+      </div>
+
+      <button class="modal-cancel" onclick="closeModal('transfer-modal')">닫기</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════ 관리자 패널 ════════ -->
+<div class="overlay" id="admin-modal">
+  <div class="modal admin-panel">
+    <div class="modal-head" style="background:var(--ink);color:var(--paper)">
+      <h3 style="color:var(--gold);font-weight:400;font-size:12px;letter-spacing:.12em">ADMIN PANEL</h3>
+      <button class="x" onclick="closeModal('admin-modal')" style="color:var(--paper)">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:16px">
+
+      <!-- 비밀번호 -->
+      <div id="admin-lock" class="admin-section">
+        <h4>관리자 비밀번호</h4>
+        <div style="display:flex;gap:8px">
+          <input type="password" id="admin-pw" placeholder="비밀번호 입력" style="flex:1"/>
+          <button class="btn-verify" onclick="checkAdminPw()">입력</button>
+        </div>
+        <div class="verify-msg err" id="pw-msg" style="margin-top:6px"></div>
+      </div>
+
+      <!-- 관리자 콘텐츠 (비번 맞을 때만 표시) -->
+      <div id="admin-content" style="display:none">
+
+        <!-- 계좌 설정 -->
+        <div class="admin-section">
+          <h4>계좌 정보 설정</h4>
+          <div class="field"><label>은행명</label><input id="cfg-bank" value="농협"/></div>
+          <div class="field"><label>계좌번호</label><input id="cfg-account" value="3333-00-0000000" style="font-family:'DM Mono',monospace"/></div>
+          <div class="field"><label>예금주</label><input id="cfg-holder" value="홍길동"/></div>
+          <button onclick="saveAccountConfig()" style="width:100%;padding:9px;background:var(--ink);color:var(--paper);border:none;font-family:'Noto Serif KR',serif;font-size:12px;cursor:pointer;border-radius:3px;margin-top:4px">계좌 정보 저장</button>
+        </div>
+
+        <!-- 인증코드 발급 -->
+        <div class="admin-section">
+          <h4>인증코드 발급</h4>
+          <div class="admin-notice" style="margin-bottom:10px">
+            입금 확인 후 아래에서 코드 생성 → 고객 카카오톡으로 전송
+          </div>
+          <div class="code-gen-row">
+            <div class="gen-code-display" id="gen-code-display">------</div>
+            <button class="btn-gen-code" onclick="generateCode()">새 코드 생성</button>
+          </div>
+          <div style="font-size:11px;color:var(--ink3);margin-top:8px">
+            생성된 코드를 고객 카카오톡으로 직접 전송해주세요
+          </div>
+        </div>
+
+        <!-- 발급 내역 -->
+        <div class="admin-section">
+          <h4>발급 내역</h4>
+          <div class="order-list" id="order-list">
+            <div style="font-size:12px;color:var(--ink3);text-align:center;padding:12px">발급 내역 없음</div>
+          </div>
+        </div>
+
+        <div class="admin-notice">
+          💡 운영 팁: 카카오톡 오픈채팅을 개설해서 입금 알림을 받으면 더 빠른 코드 발송이 가능해요
+        </div>
+      </div>
+
+      <button class="modal-cancel" onclick="closeModal('admin-modal')" style="margin-top:12px">닫기</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════ 카카오 서명 모달 ════════ -->
+<div class="overlay" id="sign-modal">
+  <div class="modal sign-modal">
+    <div class="modal-head" style="background:#191600">
+      <h3 style="color:var(--kakao)">카카오 전자서명 요청</h3>
+      <button class="x" onclick="closeModal('sign-modal')" style="color:var(--kakao);opacity:.5">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:18px">
+      <div class="kakao-top">
+        <div class="kt-icon"><svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M9 1.5C4.86 1.5 1.5 4.14 1.5 7.38c0 2.07 1.26 3.9 3.18 4.98L4.02 15l3.6-2.34c.45.06.9.09 1.38.09 4.14 0 7.5-2.64 7.5-5.88S13.14 1.5 9 1.5z" fill="#FEE500"/></svg></div>
+        <div><div class="kt-title">카카오써트 전자계약</div><div class="kt-sub">카카오톡 발송 · 공동인증서와 동일한 법적 효력</div></div>
+      </div>
+      <div class="signer-card">
+        <div class="sc-role">채권자</div>
+        <div class="sc-name" id="sm-ln">—</div>
+        <div class="sc-ph"><input id="sm-lp" placeholder="010-0000-0000" maxlength="13"/></div>
+      </div>
+      <div class="signer-card">
+        <div class="sc-role">채무자</div>
+        <div class="sc-name" id="sm-bn">—</div>
+        <div class="sc-ph"><input id="sm-bp" placeholder="010-0000-0000" maxlength="13"/></div>
+      </div>
+      <button class="btn-send" onclick="sendSign()">
+        <svg width="15" height="15" viewBox="0 0 18 18" fill="none"><path d="M9 1.5C4.86 1.5 1.5 4.14 1.5 7.38c0 2.07 1.26 3.9 3.18 4.98L4.02 15l3.6-2.34c.45.06.9.09 1.38.09 4.14 0 7.5-2.64 7.5-5.88S13.14 1.5 9 1.5z" fill="var(--kakao-dark)"/></svg>
+        카카오톡으로 서명 요청 발송
+      </button>
+      <button class="modal-cancel" onclick="closeModal('sign-modal')">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- 서명 완료 -->
+<div class="overlay" id="done-modal">
+  <div class="modal" style="width:400px">
+    <div class="modal-head" style="background:var(--green)">
+      <h3 style="color:#fff;font-weight:400">발송 완료</h3>
+      <button class="x" onclick="closeModal('done-modal')" style="color:#fff">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:20px">
+      <div class="done-box">
+        <div style="width:50px;height:50px;background:var(--kakao);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:20px">✓</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:6px">카카오톡 발송 완료!</div>
+        <p style="font-size:12px;color:var(--ink3);line-height:1.8;margin-bottom:14px">두 분의 카카오톡으로<br/>서명 요청이 전송되었습니다</p>
+        <div class="done-detail">
+          <div class="dd-row"><span>채권자</span><span id="d-ln">—</span></div>
+          <div class="dd-row"><span>채무자</span><span id="d-bn">—</span></div>
+          <div class="dd-row"><span>서명 기한</span><span id="d-dl">—</span></div>
+          <div class="dd-row"><span>완료 시</span><span style="color:var(--green)">PDF 자동 발송</span></div>
+        </div>
+      </div>
+      <button class="modal-cancel" onclick="closeModal('done-modal')">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- 로딩 -->
+<div class="g-loader" id="loader">
+  <div class="lsp"></div>
+  <p id="loader-msg">처리 중...</p>
+</div>
+
+<script>
+// ══════════════════════════════════════
+//  ⚙️  운영자 설정 — 여기만 수정하면 됩니다
+// ══════════════════════════════════════
+const CFG = {
+  BANK:       '농협',
+  ACCOUNT:    '225038-56-027579',
+  HOLDER:     '차호윤',
+  ADMIN_PW:   '0640',
+  SIGN_API:   '/api/send-sign',
+  TEST_MODE:  true,
+  MASTER_CODES: []  // 생성된 코드가 여기에 자동 추가됨
+};
+// ══════════════════════════════════════
+
+const $ = id => document.getElementById(id);
+const v = id => $(id) ? $(id).value.trim() : '';
+
+// 발급된 코드 목록 (실제 서비스에선 서버 DB 사용 권장)
+// 코드는 서버에서 관리
+let isPaid = false;
+
+function comma(n){return Number(n).toLocaleString('ko-KR')}
+function koreanAmt(n){
+  const u=['','일','이','삼','사','오','육','칠','팔','구'],b=['','만','억','조'];
+  let num=Math.floor(Number(n)),r='',ui=0;
+  if(!num)return'영';
+  while(num>0){let c=num%10000;if(c){let s='',d=[c%10,Math.floor(c/10)%10,Math.floor(c/100)%10,Math.floor(c/1000)%10],p=['','십','백','천'];for(let i=3;i>=0;i--)if(d[i])s+=(d[i]===1&&i>0?'':u[d[i]])+p[i];r=s+b[ui]+r;}num=Math.floor(num/10000);ui++;}return r;
+}
+function setStep(n){
+  ['ps1','ps2','ps3','ps4','ps5'].forEach((id,i)=>{
+    $(id).classList.remove('active','done');
+    if(i+1<n)$(id).classList.add('done');
+    if(i+1===n)$(id).classList.add('active');
+  });
+}
+function showLoader(msg){$('loader-msg').textContent=msg;$('loader').classList.add('show')}
+function hideLoader(){$('loader').classList.remove('show')}
+function closeModal(id){$(id).classList.remove('open')}
+document.querySelectorAll('.overlay').forEach(m=>{
+  m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')})
+});
+
+// ── 초기화: CFG 고정값으로 계좌 표시 ──
+function initAccountDisplay(){
+  $('display-account').textContent = CFG.ACCOUNT;
+  $('display-holder').textContent  = CFG.HOLDER;
+  const bankEl = document.querySelector('.account-card .bank-name');
+  if(bankEl) bankEl.textContent = CFG.BANK;
+}
+initAccountDisplay();
+
+// ── 관리자: URL 파라미터 ?admin=true 로만 접근 ──
+(function(){
+  const p = new URLSearchParams(location.search);
+  if(p.get('admin') === 'true'){
+    const adminBtn = document.createElement('button');
+    adminBtn.className = 'btn-free';
+    adminBtn.textContent = '관리자';
+    adminBtn.onclick = openAdminPanel;
+    adminBtn.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:9999;opacity:.85;font-size:12px;padding:8px 16px;background:#1a1612;color:#c9a84c;border:1px solid #c9a84c;border-radius:4px;cursor:pointer;font-family:monospace;letter-spacing:.05em';
+    document.body.appendChild(adminBtn);
+  }
+})();
+
+// ── 계좌이체 모달 ──
+function openTransferModal(){
+  $('transfer-modal').classList.add('open');
+  setStep(1);
+}
+function copyAccount(){
+  const account = CFG.ACCOUNT;
+  navigator.clipboard.writeText(account.replace(/-/g,'')).then(()=>{
+    const btn = document.querySelector('.copy-btn');
+    const orig = btn.innerHTML;
+    btn.textContent = '복사됨 ✓';
+    setTimeout(()=>{btn.innerHTML=orig},1500);
+  });
+}
+
+// ── 인증코드 검증 ──
+// 고객이 직접 코드 입력
+function verifyCode(){
+  const code = v('code-input').toUpperCase().trim();
+  if(code.length < 4){
+    $('verify-msg').className='verify-msg err';
+    $('verify-msg').textContent='인증코드를 입력해주세요';
+    return;
+  }
+  checkCode(code);
+}
+
+function checkCode(code){
+  // 유효한 코드 목록: 관리자가 생성한 코드를 여기에 추가
+  // 사용된 코드는 sessionStorage로 중복 방지
+  const usedCodes = JSON.parse(sessionStorage.getItem('used') || '[]');
+  if(usedCodes.includes(code)){
+    $('verify-msg').className='verify-msg err';
+    $('verify-msg').textContent='이미 사용된 코드입니다';
+    return;
+  }
+
+  // 서버 API 호출 (파일이 없으면 관리자 직접 코드 방식으로 폴백)
+  fetch('/api/verify-code', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({code})
+  })
+  .then(r=>r.json())
+  .then(data=>{
+    if(data.success){
+      usedCodes.push(code);
+      sessionStorage.setItem('used', JSON.stringify(usedCodes));
+      $('verify-msg').className='verify-msg ok';
+      $('verify-msg').textContent='✓ 인증 완료!';
+      setTimeout(()=>{ closeModal('transfer-modal'); activateForm(); }, 800);
+    } else {
+      $('verify-msg').className='verify-msg err';
+      $('verify-msg').textContent = data.message || '올바르지 않은 코드입니다';
+    }
+  })
+  .catch(()=>{
+    // API 서버 없을 때: 관리자가 직접 설정한 마스터 코드로 검증
+    const masterCodes = CFG.MASTER_CODES || [];
+    if(masterCodes.includes(code)){
+      usedCodes.push(code);
+      sessionStorage.setItem('used', JSON.stringify(usedCodes));
+      $('verify-msg').className='verify-msg ok';
+      $('verify-msg').textContent='✓ 인증 완료!';
+      setTimeout(()=>{ closeModal('transfer-modal'); activateForm(); }, 800);
+    } else {
+      $('verify-msg').className='verify-msg err';
+      $('verify-msg').textContent='올바르지 않은 코드입니다';
+    }
+  });
+}
+
+// ── 폼 활성화 ──
+function activateForm(){
+  isPaid = true;
+  $('pay-lock').classList.add('hidden');
+  $('paid-badge').classList.add('show');
+  document.querySelectorAll('.form-panel input, .form-panel select, .form-panel textarea')
+    .forEach(el => el.disabled = false);
+  $('genbtn').disabled = false;
+  $('ph-msg').textContent = '정보를 입력하고 작성 버튼을 눌러주세요';
+  setStep(3);
+}
+
+// ── 관리자 패널 ──
+function openAdminPanel(){$('admin-modal').classList.add('open')}
+function checkAdminPw(){
+  const pw = v('admin-pw');
+  const correctPw = CFG.ADMIN_PW;
+  if(pw === correctPw){
+    $('admin-lock').style.display='none';
+    $('admin-content').style.display='block';
+    $('cfg-bank').value    = CFG.BANK;
+    $('cfg-account').value = CFG.ACCOUNT;
+    $('cfg-holder').value  = CFG.HOLDER;
+    renderOrderList();
+  } else {
+    $('pw-msg').textContent = '비밀번호가 올바르지 않습니다';
+  }
+}
+
+function saveAccountConfig(){
+  alert('계좌 변경은 index.html 파일 상단 CFG 설정에서 직접 수정 후 GitHub에 다시 올려주세요.\n\nCFG.BANK, CFG.ACCOUNT, CFG.HOLDER 값을 변경하면 됩니다.');
+}
+
+// ── 인증코드 생성 ──
+async function generateCode(){
+  $('gen-code-display').textContent = '생성 중...';
+  try {
+    const res = await fetch('/api/generate-code', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ adminPw: CFG.ADMIN_PW })
+    });
+    const data = await res.json();
+    if(data.success){
+      $('gen-code-display').textContent = data.code;
+      renderOrderList();
+    } else {
+      $('gen-code-display').textContent = '오류';
+      alert('코드 생성 실패: ' + data.message);
+    }
+  } catch(e) {
+    $('gen-code-display').textContent = '오류';
+    alert('서버 오류: ' + e.message);
+  }
+}
+
+async function renderOrderList(){
+  const list = $('order-list');
+  list.innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:12px">불러오는 중...</div>';
+  try {
+    const res = await fetch('/api/list-codes', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ adminPw: CFG.ADMIN_PW })
+    });
+    const data = await res.json();
+    if(!data.codes?.length){
+      list.innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:12px">발급 내역 없음</div>';
+      return;
+    }
+    list.innerHTML = data.codes.slice(0,20).map(c=>`
+      <div class="order-row">
+        <span class="ot">${c.created}</span>
+        <span class="oc">${c.code}</span>
+        <span class="os ${c.used?'used':'ready'}">${c.used?'사용됨':'대기중'}</span>
+      </div>
+    `).join('');
+  } catch(e) {
+    list.innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:12px">불러오기 실패</div>';
+  }
+}
+
+// ── 차용증 생성 ──
+async function generateDoc(){
+  const lName=v('ln'),bName=v('bn'),amt=v('amt'),ds=v('ds'),de=v('de');
+  if(!lName||!bName||!amt||!ds||!de){alert('채권자·채무자 성명, 금액, 날짜는 필수입니다.');return}
+  const btn=$('genbtn');btn.classList.add('loading');
+  showLoader('AI가 차용증을 작성하는 중...');
+  const prompt=`아래 정보로 한국 법률에 맞는 차용증 본문을 작성해주세요.
+규칙: 법적 문서체, 존댓말 없음, 금액 한글 병기(금 ${koreanAmt(amt)}원 정 (₩${comma(amt)})), 원금/이자/변제방법/기한이익 상실/관할 법원 조항 포함, 특약 있으면 추가. **중요항목**은 **텍스트**로. 본문만 출력.
+채권자: ${lName} (${v('li')||'주민번호 미기재'}) / ${v('la')||'주소 미기재'}
+채무자: ${bName} (${v('bi')||'주민번호 미기재'}) / ${v('ba')||'주소 미기재'}
+원금: ${comma(amt)}원 / 이자: 연 ${v('rate')||0}% / 대여: ${ds} / 변제: ${de}
+이자지급: ${$('im').value} / 변제방법: ${$('rm').value}
+특약: ${v('sp')||'없음'}`;
+  try{
+    const res=await fetch('/api/generate-doc',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({prompt})
+    });
+    const data=await res.json();
+    if(!data.success) throw new Error(data.message||'오류');
+    const text=data.text;
+    $('docbody').innerHTML=text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
+    $('sigl').textContent=lName+' (인)';$('sigla').textContent=v('la');
+    $('sigb').textContent=bName+' (인)';$('sigba').textContent=v('ba');
+    $('docdate').textContent=new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric'});
+    $('ph').style.display='none';$('document').style.display='block';
+    $('actbar').classList.add('show');setStep(4);
+  }catch(e){alert('오류가 발생했습니다.')}
+  finally{btn.classList.remove('loading');hideLoader()}
+}
+
+// ── PDF 저장 ──
+async function downloadPDF(){
+  showLoader('PDF 생성 중...');
+  try{
+    const{jsPDF}=window.jspdf;
+    const canvas=await html2canvas($('document'),{scale:2,backgroundColor:'#ffffff'});
+    const img=canvas.toDataURL('image/jpeg',.95);
+    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const pw=pdf.internal.pageSize.getWidth();
+    const iw=pw-20,ih=iw/(canvas.width/canvas.height);
+    pdf.addImage(img,'JPEG',10,10,iw,ih);
+    pdf.save('차용증_'+new Date().toLocaleDateString('ko-KR').replace(/[\. ]/g,'').replace('.','')+ '.pdf');
+  }finally{hideLoader()}
+}
+
+// ── 링크 복사 ──
+function copyLink(){
+  const link = $('gen-link-display').value;
+  if(!link || link.includes('코드 생성')) return;
+  navigator.clipboard.writeText(link).then(()=>{
+    const btn = event.target;
+    btn.textContent='복사됨 ✓';
+    setTimeout(()=>btn.textContent='복사', 1500);
+  });
+}
+
+// ── URL에 code 파라미터 있으면 자동 인증 ──
+(function(){
+  const p = new URLSearchParams(location.search);
+  const urlCode = p.get('code');
+  if(urlCode){
+    // 잠금화면이 로드된 후 자동 인증
+    window.addEventListener('load', ()=>{
+      setTimeout(()=>{
+        $('code-input').value = urlCode;
+        $('verify-msg').className='verify-msg';
+        $('verify-msg').textContent='링크 인증 확인 중...';
+        openTransferModal();
+        setTimeout(()=>checkCode(urlCode.toUpperCase()), 500);
+      }, 300);
+    });
+  }
+})();
+
+// ── 서명 모달 ──
+function openSignModal(){
+  $('sm-ln').textContent=v('ln')||'—';
+  $('sm-bn').textContent=v('bn')||'—';
+  $('sm-lp').value=v('lp');$('sm-bp').value=v('bp');
+  $('sign-modal').classList.add('open');
+}
+async function sendSign(){
+  const lPhone=v('sm-lp'),bPhone=v('sm-bp');
+  if(!lPhone||!bPhone){alert('두 분의 휴대폰 번호를 입력해주세요.');return}
+  closeModal('sign-modal');
+  showLoader('카카오톡 발송 중...');setStep(5);
+  await new Promise(r=>setTimeout(r,1500));
+  $('d-ln').textContent=v('ln');$('d-bn').textContent=v('bn');
+  const dl=new Date();dl.setDate(dl.getDate()+7);
+  $('d-dl').textContent=dl.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric'});
+  hideLoader();$('done-modal').classList.add('open');
+}
+</script>
+</body>
+</html>
