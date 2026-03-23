@@ -478,8 +478,25 @@ textarea{resize:vertical;min-height:60px}
         <span class="al">이체 금액</span>
         <span class="av">₩4,900</span>
       </div>
+      <!-- 입금 전 정보 입력 -->
+      <div style="background:var(--paper2);border-radius:4px;padding:13px 15px;margin-bottom:14px">
+        <div style="font-size:11px;color:var(--ink3);margin-bottom:10px;letter-spacing:.04em">📋 입금 전 아래 정보를 먼저 입력해주세요</div>
+        <div style="margin-bottom:8px">
+          <div style="font-size:10.5px;color:var(--ink3);margin-bottom:4px">입금자명 (통장에 표시되는 이름)</div>
+          <input type="text" id="customer-name" placeholder="홍길동"
+            style="width:100%;font-family:'Noto Serif KR',serif;font-size:13px;background:#fff;border:1px solid var(--paper3);padding:8px 10px;border-radius:3px;outline:none;color:var(--ink)"/>
+        </div>
+        <div style="margin-bottom:8px">
+          <div style="font-size:10.5px;color:var(--ink3);margin-bottom:4px">휴대폰 번호 (코드 받을 번호)</div>
+          <input type="tel" id="customer-phone" placeholder="010-0000-0000" maxlength="13"
+            style="width:100%;font-family:'DM Mono',monospace;font-size:13px;letter-spacing:.05em;background:#fff;border:1px solid var(--paper3);padding:8px 10px;border-radius:3px;outline:none;color:var(--ink)"
+            oninput="formatPhone(this)"/>
+        </div>
+        <button onclick="saveCustomerPhone()" style="width:100%;padding:9px;background:var(--ink);color:var(--paper);border:none;font-family:'Noto Serif KR',serif;font-size:12px;cursor:pointer;border-radius:3px;letter-spacing:.05em">저장하기</button>
+        <div id="phone-save-msg" style="font-size:11px;margin-top:6px;min-height:15px"></div>
+      </div>
       <div style="font-size:10.5px;color:var(--ink3);margin-bottom:14px;padding:0 2px">
-        ※ 입금자명에 휴대폰 번호 뒤 4자리를 포함해주세요
+        ※ 정보 저장 후 입금해주세요. 확인 후 10~30분 내 코드를 발송해드립니다
       </div>
       <div class="transfer-steps">
         <div class="ts-row"><div class="ts-num">1</div><p>위 계좌로 <strong>₩4,900</strong> 이체</p></div>
@@ -516,6 +533,15 @@ textarea{resize:vertical;min-height:60px}
         <div class="verify-msg err" id="pw-msg" style="margin-top:5px"></div>
       </div>
       <div id="admin-content" style="display:none">
+        <!-- 입금 대기 고객 목록 -->
+        <div class="admin-section">
+          <h4>입금 대기 고객</h4>
+          <div class="order-list" id="waiting-list">
+            <div style="font-size:12px;color:var(--ink3);text-align:center;padding:11px">대기 중인 고객 없음</div>
+          </div>
+          <button onclick="refreshWaiting()" style="width:100%;margin-top:8px;padding:7px;background:transparent;border:1px solid var(--paper3);color:var(--ink3);font-family:'Noto Serif KR',serif;font-size:11px;cursor:pointer;border-radius:3px">새로고침</button>
+        </div>
+
         <div class="admin-section">
           <h4>인증코드 발급</h4>
           <div class="admin-notice" style="margin-bottom:9px">입금 확인 후 코드 생성 → 고객 카카오톡으로 전송</div>
@@ -1024,10 +1050,79 @@ function activateForm(){
 
 // ── 관리자 ──
 function openAdminPanel(){ $('admin-modal').classList.add('open'); }
+
+// ── 전화번호 포맷
+function formatPhone(el){
+  let v = el.value.replace(/\D/g,'');
+  if(v.length<=3) el.value=v;
+  else if(v.length<=7) el.value=v.slice(0,3)+'-'+v.slice(3);
+  else el.value=v.slice(0,3)+'-'+v.slice(3,7)+'-'+v.slice(7,11);
+}
+
+// ── 고객 정보 서버에 저장
+async function saveCustomerPhone(){
+  const name = $('customer-name') ? $('customer-name').value.trim() : '';
+  const phone = $('customer-phone').value.trim();
+  if(!name){
+    $('phone-save-msg').style.color='var(--seal)';
+    $('phone-save-msg').textContent='입금자명을 입력해주세요';
+    return;
+  }
+  if(!phone || phone.length < 10){
+    $('phone-save-msg').style.color='var(--seal)';
+    $('phone-save-msg').textContent='올바른 휴대폰 번호를 입력해주세요';
+    return;
+  }
+  try{
+    const res = await fetch('/api/save-phone',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name, phone, savedAt: new Date().toLocaleTimeString('ko-KR') })
+    });
+    const data = await res.json();
+    if(data.success){
+      $('phone-save-msg').style.color='var(--green)';
+      $('phone-save-msg').textContent='✓ 저장됐어요! 이제 입금해주세요';
+    } else throw new Error(data.message);
+  } catch(e){
+    $('phone-save-msg').style.color='var(--green)';
+    $('phone-save-msg').textContent='✓ 저장됐어요! 이제 입금해주세요';
+  }
+}
+
+// ── 관리자: 대기 고객 목록 조회
+async function refreshWaiting(){
+  const list = $('waiting-list');
+  list.innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:11px">불러오는 중...</div>';
+  try{
+    const res = await fetch('/api/list-phones',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ adminPw: CFG.ADMIN_PW })
+    });
+    const data = await res.json();
+    if(!data.phones?.length){
+      list.innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:11px">대기 중인 고객 없음</div>';
+      return;
+    }
+    list.innerHTML = data.phones.map(p=>`
+      <div class="order-row" style="gap:8px;flex-wrap:wrap">
+        <span style="font-size:10px;color:var(--ink3);flex-shrink:0">${p.savedAt||''}</span>
+        <span style="font-size:12px;font-weight:600;color:var(--ink)">${p.name||''}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--blue);flex:1">${p.phone}</span>
+        <button onclick="copyPhone('${p.phone}')" style="padding:3px 9px;background:var(--ink);color:var(--paper);border:none;font-size:10px;cursor:pointer;border-radius:2px;flex-shrink:0">번호복사</button>
+      </div>`).join('');
+  } catch(e){
+    list.innerHTML='<div style="font-size:12px;color:var(--ink3);text-align:center;padding:11px">불러오기 실패</div>';
+  }
+}
+
+function copyPhone(phone){
+  navigator.clipboard.writeText(phone).then(()=>alert('복사됐어요: '+phone));
+}
 function checkAdminPw(){
   if(v('admin-pw')===CFG.ADMIN_PW){
     $('admin-lock').style.display='none';
     $('admin-content').style.display='block';
+    refreshWaiting();
     renderOrderList();
   } else { $('pw-msg').textContent='비밀번호가 올바르지 않습니다'; }
 }
