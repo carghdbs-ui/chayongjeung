@@ -22,6 +22,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;600&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" integrity="sha384-TiCUE00h649CAMonG018J2ujOgDKW/kVWlChEuu4jK2vxfAAD0eZxzCKakxg55G4" crossorigin="anonymous"></script>
 <style>
 :root{
   --ink:#1a1612;--ink2:#3d3530;--ink3:#7a6e67;
@@ -1322,15 +1323,31 @@ function copyShareLink(){
 function shareKakao(){
   const url=window._pdfUrl;
   if(!url){alert('먼저 PDF 저장을 눌러주세요.');return;}
-  const msg=encodeURIComponent(currentContract+'이 완성됐습니다. 아래 링크에서 다운로드해주세요:\n'+url);
-  // 카카오톡 앱으로 공유 (모바일)
-  if(/Android|iPhone|iPad/i.test(navigator.userAgent)){
-    window.open('kakaotalk://send?text='+msg);
-  } else {
-    // PC에서는 링크 복사 안내
-    navigator.clipboard.writeText(currentContract+'이 완성됐습니다. 아래 링크에서 다운로드해주세요:\n'+url);
-    alert('링크가 복사됐어요!\n카카오톡에 붙여넣기(Ctrl+V) 해서 상대방에게 보내주세요.');
+
+  // 카카오 SDK 초기화
+  if(!window.Kakao.isInitialized()){
+    window.Kakao.init('8b209acf0cc95743625a1596f1f68a1d');
   }
+
+  window.Kakao.Share.sendDefault({
+    objectType:'feed',
+    content:{
+      title:'[계약서마당] '+currentContract+' 완성',
+      description:'계약서가 작성됐습니다. 아래 버튼을 눌러 확인하세요.',
+      imageUrl:'https://chayongjeung.vercel.app/og-image.png',
+      link:{
+        mobileWebUrl:url,
+        webUrl:url,
+      },
+    },
+    buttons:[{
+      title:'계약서 확인하기',
+      link:{
+        mobileWebUrl:url,
+        webUrl:url,
+      },
+    }],
+  });
 }
 
 function shareSMS(){
