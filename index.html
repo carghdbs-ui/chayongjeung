@@ -469,6 +469,23 @@ textarea{resize:vertical;min-height:60px}
 </div>
 
 <!-- 계좌이체 모달 -->
+<!-- PDF 링크 공유 섹션 -->
+<div id="share-section" style="display:none;max-width:560px;margin:10px auto 0;background:var(--paper);border:1px solid var(--paper3);border-radius:6px;padding:16px">
+  <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;letter-spacing:.04em">📎 계약서 링크 — 상대방에게 공유하세요</div>
+  <div style="display:flex;gap:7px;margin-bottom:8px">
+    <input id="share-link-display" readonly style="flex:1;font-size:11px;font-family:'DM Mono',monospace;background:var(--paper2);border:1px solid var(--paper3);padding:8px 10px;border-radius:3px;color:var(--ink);outline:none"/>
+    <button onclick="copyShareLink()" style="padding:8px 14px;background:var(--ink);color:var(--paper);border:none;font-family:'Noto Serif KR',serif;font-size:12px;cursor:pointer;border-radius:3px;white-space:nowrap">복사</button>
+  </div>
+  <div style="display:flex;gap:7px">
+    <button onclick="shareKakao()" style="flex:1;padding:10px;background:#FEE500;color:#191600;border:none;font-family:'Noto Serif KR',serif;font-size:12px;font-weight:700;cursor:pointer;border-radius:3px;display:flex;align-items:center;justify-content:center;gap:6px">
+      <svg width="14" height="14" viewBox="0 0 18 18" fill="none"><path d="M9 1.5C4.86 1.5 1.5 4.14 1.5 7.38c0 2.07 1.26 3.9 3.18 4.98L4.02 15l3.6-2.34c.45.06.9.09 1.38.09 4.14 0 7.5-2.64 7.5-5.88S13.14 1.5 9 1.5z" fill="#191600"/></svg>
+      카카오톡으로 공유
+    </button>
+    <button onclick="shareSMS()" style="flex:1;padding:10px;background:var(--blue);color:#fff;border:none;font-family:'Noto Serif KR',serif;font-size:12px;cursor:pointer;border-radius:3px">문자로 공유</button>
+  </div>
+  <div style="font-size:10px;color:var(--ink3);margin-top:8px;line-height:1.6">※ 링크는 7일간 유효합니다 · 상대방이 링크를 눌러 PDF를 다운로드할 수 있어요</div>
+</div>
+
 <div class="overlay" id="transfer-modal">
   <div class="modal" style="width:400px">
     <div class="modal-head" style="background:var(--ink);color:var(--paper)">
@@ -1195,8 +1212,54 @@ async function downloadPDF(){
     const pw=pdf.internal.pageSize.getWidth();
     const iw=pw-20,ih=iw/(canvas.width/canvas.height);
     pdf.addImage(img,'JPEG',10,10,iw,ih);
-    pdf.save(currentContract+'_'+new Date().toLocaleDateString('ko-KR').replace(/[\. ]/g,'').replace('.','')+ '.pdf');
+    const filename=currentContract+'_'+Date.now()+'.pdf';
+    pdf.save(filename);
+    // Blob 업로드 시도 (링크 공유용)
+    try{
+      const pdfBlob=pdf.output('blob');
+      const formData=new FormData();
+      formData.append('file',pdfBlob,filename);
+      formData.append('contractName',currentContract);
+      const res=await fetch('/api/upload-pdf',{method:'POST',body:formData});
+      const data=await res.json();
+      if(data.success && data.url){
+        window._pdfUrl=data.url;
+        $('share-link-display').value=data.url;
+        $('share-section').style.display='block';
+      }
+    }catch(e){ console.log('Blob 업로드 실패(로컬 다운로드는 완료):', e); }
   }finally{hideLoader();}
+}
+
+// ── PDF 링크 공유 ──
+function copyShareLink(){
+  const url=$('share-link-display').value;
+  if(!url){alert('먼저 PDF 저장을 눌러주세요.');return;}
+  navigator.clipboard.writeText(url).then(()=>{
+    const btn=event.target;const orig=btn.textContent;
+    btn.textContent='복사됨 ✓';setTimeout(()=>btn.textContent=orig,1500);
+  });
+}
+
+function shareKakao(){
+  const url=window._pdfUrl;
+  if(!url){alert('먼저 PDF 저장을 눌러주세요.');return;}
+  const msg=encodeURIComponent(currentContract+'이 완성됐습니다. 아래 링크에서 다운로드해주세요:\n'+url);
+  // 카카오톡 앱으로 공유 (모바일)
+  if(/Android|iPhone|iPad/i.test(navigator.userAgent)){
+    window.open('kakaotalk://send?text='+msg);
+  } else {
+    // PC에서는 링크 복사 안내
+    navigator.clipboard.writeText(currentContract+'이 완성됐습니다. 아래 링크에서 다운로드해주세요:\n'+url);
+    alert('링크가 복사됐어요!\n카카오톡에 붙여넣기(Ctrl+V) 해서 상대방에게 보내주세요.');
+  }
+}
+
+function shareSMS(){
+  const url=window._pdfUrl;
+  if(!url){alert('먼저 PDF 저장을 눌러주세요.');return;}
+  const msg=encodeURIComponent('[계약서마당] '+currentContract+'이 완성됐습니다. 다운로드: '+url);
+  window.open('sms:?body='+msg);
 }
 
 // ── 서명 ──
