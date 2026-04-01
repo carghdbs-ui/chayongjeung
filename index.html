@@ -1206,83 +1206,78 @@ async function downloadPDF(){
   try{
     const{jsPDF}=window.jspdf;
     const docEl=$('document');
-    const previewPanel=document.querySelector('.preview-panel');
 
-    // 1. 오버레이 요소들 일시 숨김
-    const toHide=[];
-    // preview-panel::before (줄무늬 배경) 숨기기
-    const styleTag=document.createElement('style');
-    styleTag.id='pdf-temp-style';
-    styleTag.textContent=`.preview-panel::before{display:none!important} #document{box-shadow:none!important}`;
-    document.head.appendChild(styleTag);
+    // 문서를 완전히 독립된 컨테이너에서 캡처
+    // 기존 위치에서 꺼내서 body에 직접 붙임
+    const wrapper=document.createElement('div');
+    wrapper.style.cssText='position:fixed;top:0;left:0;width:794px;background:#fff;z-index:-9999;overflow:visible;';
+    document.body.appendChild(wrapper);
 
-    // 2. 문서 전체 크기로 캡처
-    const origMaxWidth=docEl.style.maxWidth;
-    const origMargin=docEl.style.margin;
-    docEl.style.maxWidth='none';
-    docEl.style.margin='0';
+    // 문서 내용만 복제 (스타일 포함 안 됨)
+    const clone=docEl.cloneNode(true);
+    clone.style.cssText='display:block;width:794px;max-width:none;margin:0;padding:52px 60px;background:#ffffff;box-shadow:none;position:static;';
+    // 상단 컬러바 유지
+    clone.querySelector && clone.querySelectorAll('*').forEach(el=>{
+      const bg=window.getComputedStyle(el).background;
+    });
+    wrapper.appendChild(clone);
 
-    const canvas=await html2canvas(docEl,{
+    // 잠깐 기다려서 렌더링 완료
+    await new Promise(r=>setTimeout(r,100));
+
+    const canvas=await html2canvas(wrapper,{
       scale:2,
       backgroundColor:'#ffffff',
       useCORS:true,
-      allowTaint:true,
-      scrollY:-window.scrollY,
-      y:0,
-      x:0,
-      width:docEl.scrollWidth,
-      height:docEl.scrollHeight,
-      windowWidth:docEl.scrollWidth,
+      logging:false,
+      width:794,
+      height:wrapper.scrollHeight,
+      windowWidth:794,
     });
 
-    // 3. 원상복구
-    docEl.style.maxWidth=origMaxWidth;
-    docEl.style.margin=origMargin;
-    document.head.removeChild(styleTag);
+    document.body.removeChild(wrapper);
 
-    // 4. PDF 생성 (A4, 페이지 자동 분할)
+    // A4 PDF 생성 (페이지 자동 분할)
     const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
     const pw=pdf.internal.pageSize.getWidth();
     const ph=pdf.internal.pageSize.getHeight();
-    const margin=10;
-    const iw=pw-margin*2;
+    const mg=10;
+    const iw=pw-mg*2;
     const pxPerMm=canvas.width/iw;
-    const pageHeightPx=(ph-margin*2)*pxPerMm;
+    const pageHpx=(ph-mg*2)*pxPerMm;
 
-    let srcY=0;
-    while(srcY<canvas.height){
-      const sliceH=Math.min(pageHeightPx,canvas.height-srcY);
-      const pageCanvas=document.createElement('canvas');
-      pageCanvas.width=canvas.width;
-      pageCanvas.height=sliceH;
-      const ctx=pageCanvas.getContext('2d');
+    let sy=0;
+    while(sy<canvas.height){
+      const sh=Math.min(pageHpx,canvas.height-sy);
+      const pc=document.createElement('canvas');
+      pc.width=canvas.width; pc.height=sh;
+      const ctx=pc.getContext('2d');
       ctx.fillStyle='#ffffff';
-      ctx.fillRect(0,0,pageCanvas.width,pageCanvas.height);
-      ctx.drawImage(canvas,0,srcY,canvas.width,sliceH,0,0,canvas.width,sliceH);
-      const imgH=sliceH/pxPerMm;
-      if(srcY>0) pdf.addPage();
-      pdf.addImage(pageCanvas.toDataURL('image/jpeg',.95),'JPEG',margin,margin,iw,imgH);
-      srcY+=pageHeightPx;
+      ctx.fillRect(0,0,pc.width,pc.height);
+      ctx.drawImage(canvas,0,sy,canvas.width,sh,0,0,canvas.width,sh);
+      if(sy>0) pdf.addPage();
+      pdf.addImage(pc.toDataURL('image/jpeg',.96),'JPEG',mg,mg,iw,sh/pxPerMm);
+      sy+=pageHpx;
     }
 
     const filename=currentContract+'_'+Date.now()+'.pdf';
     pdf.save(filename);
 
-    // 5. Blob 업로드
+    // Blob 업로드
     try{
       const pdfBlob=pdf.output('blob');
-      const formData=new FormData();
-      formData.append('file',pdfBlob,filename);
-      formData.append('contractName',currentContract);
-      const res=await fetch('/api/upload-pdf',{method:'POST',body:formData});
+      const fd=new FormData();
+      fd.append('file',pdfBlob,filename);
+      fd.append('contractName',currentContract);
+      const res=await fetch('/api/upload-pdf',{method:'POST',body:fd});
       const data=await res.json();
-      if(data.success && data.url){
+      if(data.success&&data.url){
         window._pdfUrl=data.url;
         $('share-link-display').value=data.url;
         $('share-section').style.display='block';
         $('share-section').scrollIntoView({behavior:'smooth',block:'nearest'});
       }
-    }catch(e){ console.log('Blob 업로드 실패:', e); }
+    }catch(e){console.log('Blob 오류:',e);}
   }finally{hideLoader();}
 }
 
