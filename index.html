@@ -1206,72 +1206,69 @@ async function downloadPDF(){
   try{
     const{jsPDF}=window.jspdf;
     const docEl=$('document');
+    const previewPanel=document.querySelector('.preview-panel');
 
-    // 문서를 임시로 absolute/fixed에서 분리해 전체 높이 캡처
-    const origStyle={
-      position: docEl.style.position,
-      top: docEl.style.top,
-      left: docEl.style.left,
-      zIndex: docEl.style.zIndex,
-      boxShadow: docEl.style.boxShadow,
-    };
+    // 1. 오버레이 요소들 일시 숨김
+    const toHide=[];
+    // preview-panel::before (줄무늬 배경) 숨기기
+    const styleTag=document.createElement('style');
+    styleTag.id='pdf-temp-style';
+    styleTag.textContent=`.preview-panel::before{display:none!important} #document{box-shadow:none!important}`;
+    document.head.appendChild(styleTag);
 
-    // 오버레이·배경 없이 문서만 캡처하기 위해 임시 div에 복제
-    const clone=docEl.cloneNode(true);
-    clone.style.cssText=`
-      position:fixed;top:0;left:-9999px;
-      width:${docEl.offsetWidth}px;
-      background:#ffffff;
-      box-shadow:none;
-      margin:0;padding:52px 60px;
-      display:block;
-    `;
-    document.body.appendChild(clone);
+    // 2. 문서 전체 크기로 캡처
+    const origMaxWidth=docEl.style.maxWidth;
+    const origMargin=docEl.style.margin;
+    docEl.style.maxWidth='none';
+    docEl.style.margin='0';
 
-    const canvas=await html2canvas(clone,{
+    const canvas=await html2canvas(docEl,{
       scale:2,
       backgroundColor:'#ffffff',
       useCORS:true,
       allowTaint:true,
-      scrollY:0,
-      windowWidth:clone.offsetWidth,
-      width:clone.offsetWidth,
-      height:clone.scrollHeight,
+      scrollY:-window.scrollY,
+      y:0,
+      x:0,
+      width:docEl.scrollWidth,
+      height:docEl.scrollHeight,
+      windowWidth:docEl.scrollWidth,
     });
 
-    document.body.removeChild(clone);
+    // 3. 원상복구
+    docEl.style.maxWidth=origMaxWidth;
+    docEl.style.margin=origMargin;
+    document.head.removeChild(styleTag);
 
+    // 4. PDF 생성 (A4, 페이지 자동 분할)
     const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
     const pw=pdf.internal.pageSize.getWidth();
     const ph=pdf.internal.pageSize.getHeight();
-    const iw=pw-20;
-    const ih=iw*(canvas.height/canvas.width);
+    const margin=10;
+    const iw=pw-margin*2;
+    const pxPerMm=canvas.width/iw;
+    const pageHeightPx=(ph-margin*2)*pxPerMm;
 
-    // 페이지 넘김 처리
-    if(ih<=ph-20){
-      // 한 페이지
-      pdf.addImage(canvas.toDataURL('image/jpeg',.95),'JPEG',10,10,iw,ih);
-    } else {
-      // 여러 페이지
-      const pageH=Math.floor(canvas.height*(ph-20)/ih*canvas.width/canvas.width);
-      let y=0;
-      while(y<canvas.height){
-        const pageCanvas=document.createElement('canvas');
-        pageCanvas.width=canvas.width;
-        pageCanvas.height=Math.min(pageH,canvas.height-y);
-        const ctx=pageCanvas.getContext('2d');
-        ctx.drawImage(canvas,0,y,canvas.width,pageCanvas.height,0,0,canvas.width,pageCanvas.height);
-        const sliceH=iw*(pageCanvas.height/canvas.width);
-        if(y>0) pdf.addPage();
-        pdf.addImage(pageCanvas.toDataURL('image/jpeg',.95),'JPEG',10,10,iw,sliceH);
-        y+=pageH;
-      }
+    let srcY=0;
+    while(srcY<canvas.height){
+      const sliceH=Math.min(pageHeightPx,canvas.height-srcY);
+      const pageCanvas=document.createElement('canvas');
+      pageCanvas.width=canvas.width;
+      pageCanvas.height=sliceH;
+      const ctx=pageCanvas.getContext('2d');
+      ctx.fillStyle='#ffffff';
+      ctx.fillRect(0,0,pageCanvas.width,pageCanvas.height);
+      ctx.drawImage(canvas,0,srcY,canvas.width,sliceH,0,0,canvas.width,sliceH);
+      const imgH=sliceH/pxPerMm;
+      if(srcY>0) pdf.addPage();
+      pdf.addImage(pageCanvas.toDataURL('image/jpeg',.95),'JPEG',margin,margin,iw,imgH);
+      srcY+=pageHeightPx;
     }
 
     const filename=currentContract+'_'+Date.now()+'.pdf';
     pdf.save(filename);
 
-    // Blob 업로드
+    // 5. Blob 업로드
     try{
       const pdfBlob=pdf.output('blob');
       const formData=new FormData();
