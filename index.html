@@ -1204,81 +1204,109 @@ async function generateDoc(){
 async function downloadPDF(){
   showLoader('PDF 생성 중...');
   try{
-    const{jsPDF}=window.jspdf;
+    // 문서 HTML을 서버로 보내서 깨끗한 PDF 생성
     const docEl=$('document');
-
-    // 문서를 완전히 독립된 컨테이너에서 캡처
-    // 기존 위치에서 꺼내서 body에 직접 붙임
-    const wrapper=document.createElement('div');
-    wrapper.style.cssText='position:fixed;top:0;left:0;width:794px;background:#fff;z-index:-9999;overflow:visible;';
-    document.body.appendChild(wrapper);
-
-    // 문서 내용만 복제 (스타일 포함 안 됨)
-    const clone=docEl.cloneNode(true);
-    clone.style.cssText='display:block;width:794px;max-width:none;margin:0;padding:52px 60px;background:#ffffff;box-shadow:none;position:static;';
-    // 상단 컬러바 유지
-    clone.querySelector && clone.querySelectorAll('*').forEach(el=>{
-      const bg=window.getComputedStyle(el).background;
-    });
-    wrapper.appendChild(clone);
-
-    // 잠깐 기다려서 렌더링 완료
-    await new Promise(r=>setTimeout(r,100));
-
-    const canvas=await html2canvas(wrapper,{
-      scale:2,
-      backgroundColor:'#ffffff',
-      useCORS:true,
-      logging:false,
-      width:794,
-      height:wrapper.scrollHeight,
-      windowWidth:794,
-    });
-
-    document.body.removeChild(wrapper);
-
-    // A4 PDF 생성 (페이지 자동 분할)
-    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-    const pw=pdf.internal.pageSize.getWidth();
-    const ph=pdf.internal.pageSize.getHeight();
-    const mg=10;
-    const iw=pw-mg*2;
-    const pxPerMm=canvas.width/iw;
-    const pageHpx=(ph-mg*2)*pxPerMm;
-
-    let sy=0;
-    while(sy<canvas.height){
-      const sh=Math.min(pageHpx,canvas.height-sy);
-      const pc=document.createElement('canvas');
-      pc.width=canvas.width; pc.height=sh;
-      const ctx=pc.getContext('2d');
-      ctx.fillStyle='#ffffff';
-      ctx.fillRect(0,0,pc.width,pc.height);
-      ctx.drawImage(canvas,0,sy,canvas.width,sh,0,0,canvas.width,sh);
-      if(sy>0) pdf.addPage();
-      pdf.addImage(pc.toDataURL('image/jpeg',.96),'JPEG',mg,mg,iw,sh/pxPerMm);
-      sy+=pageHpx;
-    }
-
+    const docHtml=docEl.outerHTML;
     const filename=currentContract+'_'+Date.now()+'.pdf';
-    pdf.save(filename);
 
-    // Blob 업로드
-    try{
-      const pdfBlob=pdf.output('blob');
-      const fd=new FormData();
-      fd.append('file',pdfBlob,filename);
-      fd.append('contractName',currentContract);
-      const res=await fetch('/api/upload-pdf',{method:'POST',body:fd});
-      const data=await res.json();
-      if(data.success&&data.url){
-        window._pdfUrl=data.url;
-        $('share-link-display').value=data.url;
-        $('share-section').style.display='block';
-        $('share-section').scrollIntoView({behavior:'smooth',block:'nearest'});
-      }
-    }catch(e){console.log('Blob 오류:',e);}
+    const res=await fetch('/api/generate-pdf',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        html:docHtml,
+        contractName:currentContract,
+        filename
+      })
+    });
+
+    if(!res.ok) throw new Error('PDF 생성 실패');
+    const data=await res.json();
+
+    if(data.success&&data.url){
+      // 다운로드
+      const a=document.createElement('a');
+      a.href=data.url;
+      a.download=filename;
+      a.target='_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // 공유 섹션 표시
+      window._pdfUrl=data.url;
+      $('share-link-display').value=data.url;
+      $('share-section').style.display='block';
+      $('share-section').scrollIntoView({behavior:'smooth',block:'nearest'});
+    }
+  }catch(e){
+    // 서버 실패시 기존 방식 폴백
+    console.log('서버 PDF 실패, 로컬로 시도:', e);
+    await downloadPDFLocal();
   }finally{hideLoader();}
+}
+
+async function downloadPDFLocal(){
+  const{jsPDF}=window.jspdf;
+  const docEl=$('document');
+
+  // iframe 방식으로 깨끗하게 캡처
+  const iframe=document.createElement('iframe');
+  iframe.style.cssText='position:fixed;top:0;left:-9999px;width:794px;height:1px;border:none;background:#fff;';
+  document.body.appendChild(iframe);
+
+  const iDoc=iframe.contentDocument||iframe.contentWindow.document;
+  iDoc.open();
+  iDoc.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{background:#fff;font-family:'Noto Serif KR',serif;padding:52px 60px;width:794px;}
+      .doc-title{text-align:center;font-size:22px;font-weight:600;letter-spacing:.25em;margin-bottom:5px}
+      .doc-subtitle{text-align:center;font-size:10px;letter-spacing:.2em;color:#7a6e67;margin-bottom:28px}
+      .doc-body{font-size:13px;line-height:2.2;color:#1a1612;white-space:pre-wrap;word-break:keep-all}
+      .doc-body strong{font-weight:600}
+      .doc-seal-area{margin-top:36px;padding-top:20px;border-top:1px solid rgba(26,22,18,.12)}
+      .doc-date{text-align:center;font-size:12px;margin-bottom:20px}
+      .sig-row{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+      .sig-block .role{font-size:10px;color:#7a6e67;margin-bottom:5px}
+      .sig-block .name-line{font-size:13px;padding-bottom:3px;border-bottom:1px solid rgba(26,22,18,.12);min-height:22px}
+      .sig-block .sub{font-size:10px;color:#7a6e67;margin-top:3px}
+    </style>
+  </head><body>
+    ${docEl.outerHTML}
+  </body></html>`);
+  iDoc.close();
+
+  iframe.style.height=iDoc.body.scrollHeight+'px';
+  await new Promise(r=>setTimeout(r,800));
+
+  const canvas=await html2canvas(iDoc.body,{
+    scale:2,backgroundColor:'#ffffff',
+    width:794,height:iDoc.body.scrollHeight,
+    windowWidth:794,useCORS:true,
+  });
+  document.body.removeChild(iframe);
+
+  const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const pw=pdf.internal.pageSize.getWidth();
+  const ph=pdf.internal.pageSize.getHeight();
+  const mg=10;const iw=pw-mg*2;
+  const pxPerMm=canvas.width/iw;
+  const pageHpx=(ph-mg*2)*pxPerMm;
+  let sy=0;
+  while(sy<canvas.height){
+    const sh=Math.min(pageHpx,canvas.height-sy);
+    const pc=document.createElement('canvas');
+    pc.width=canvas.width;pc.height=sh;
+    const ctx=pc.getContext('2d');
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,pc.width,pc.height);
+    ctx.drawImage(canvas,0,sy,canvas.width,sh,0,0,canvas.width,sh);
+    if(sy>0)pdf.addPage();
+    pdf.addImage(pc.toDataURL('image/jpeg',.96),'JPEG',mg,mg,iw,sh/pxPerMm);
+    sy+=pageHpx;
+  }
+  pdf.save(currentContract+'_'+Date.now()+'.pdf');
 }
 
 // ── PDF 링크 공유 ──
