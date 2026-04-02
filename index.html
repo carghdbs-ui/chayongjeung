@@ -1329,6 +1329,10 @@ function shareKakao(){
     window.Kakao.init('77757fb14ca04996fdab76d5a8ebc8a6');
   }
 
+  // Blob URL을 쿼리파라미터로 감싸서 자사 도메인으로 전달
+  const encodedUrl=encodeURIComponent(url);
+  const shareUrl='https://chayongjeung.vercel.app?view='+encodedUrl;
+
   window.Kakao.Share.sendDefault({
     objectType:'feed',
     content:{
@@ -1336,15 +1340,15 @@ function shareKakao(){
       description:'계약서가 작성됐습니다. 아래 버튼을 눌러 확인하세요.',
       imageUrl:'https://chayongjeung.vercel.app/og-image.png',
       link:{
-        mobileWebUrl:url,
-        webUrl:url,
+        mobileWebUrl:shareUrl,
+        webUrl:shareUrl,
       },
     },
     buttons:[{
       title:'계약서 확인하기',
       link:{
-        mobileWebUrl:url,
-        webUrl:url,
+        mobileWebUrl:shareUrl,
+        webUrl:shareUrl,
       },
     }],
   });
@@ -1377,6 +1381,16 @@ async function sendSign(){
     btn.textContent='관리자';btn.onclick=openAdminPanel;
     btn.style.cssText='position:fixed;bottom:14px;right:14px;z-index:9999;opacity:.85;font-size:11px;padding:7px 14px;background:#1a1612;color:#c9a84c;border:1px solid #c9a84c;border-radius:4px;cursor:pointer;font-family:monospace';
     document.body.appendChild(btn);
+  }
+})();
+</script>
+<script>
+// ?view= 파라미터로 계약서 바로 열기 (카카오 공유 링크)
+(function(){
+  const params=new URLSearchParams(location.search);
+  const viewUrl=params.get('view');
+  if(viewUrl){
+    window.location.href=decodeURIComponent(viewUrl);
   }
 })();
 </script>
